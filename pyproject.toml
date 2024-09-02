@@ -10,15 +10,11 @@ authors = [
 ]
 dependencies = [
     "tqdm",
-    "pytest",
     "pandas",
     "pinjected",
     "toml",
     "returns",
-    "jsonpickle",
     "beartype",
-    "expression",
-    "pydantic",
 ]
 readme = "README.md"
 requires-python = ">= 3.10"
