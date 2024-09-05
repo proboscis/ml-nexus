@@ -100,15 +100,6 @@ async def docker_builder__for_rye_v2(
     )
 
 
-def RUN_with_mounts(
-        cmd,
-        caches: list[Path] = None,
-):
-    caches = caches or []
-    cache_opts = ' '.join([f"--mount=type=cache,target={c}" for c in caches])
-    return f"RUN {cache_opts} {cmd}"
-
-
 def build_base64_cmd(script: str):
     base64_script = base64.b64encode(script.encode('utf-8')).decode()
     cmd = "bash /usr/local/bin/base64_runner.sh " + base64_script

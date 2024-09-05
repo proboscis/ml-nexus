@@ -28,7 +28,6 @@ pyenv_cache_paths = [
 
 @injected
 async def a_macro_install_pyenv(
-        RUN_with_cache,
         /,
         python_version: str
 ):
@@ -97,15 +96,16 @@ def RUN_with_cache(cache_paths: list[Path], cmd):
 
 @injected
 def macro_uv_command(
-        RUN_with_cache,
-        /,
+        #RUN_with_cache,
+        #/,
         cmd):
     uv_pip_caches = [
         Path("/root/.cache/uv"),
         Path("/root/.cache/pip")
     ]
     return [
-        RUN_with_cache(uv_pip_caches, f"uv {cmd}"),
+        #RUN_with_cache(uv_pip_caches, f"uv {cmd}"),
+        f"uv {cmd}",
     ]
 
 
