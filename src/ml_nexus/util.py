@@ -9,11 +9,11 @@ from pinjected import *
 
 from ml_nexus.rsync_util import RsyncArgs
 
+
 @dataclass
 class PsResult:
     stdout: str
     stderr: str
-
 
 
 def random_hex_color():
@@ -72,16 +72,25 @@ class CommandException(Exception):
 
 
 @injected
-async def a_system_parallel(command: str, env: dict = None, working_dir=None):
+async def a_system_parallel(
+        logger,
+        /,
+        command: str, env: dict = None, working_dir=None):
     new_env = os.environ.copy()
     if env is not None:
         new_env.update(env)
 
     logger.info(f"running command=>{command}")
+
+    # prev_state = await a_get_stty_state()
+
     proc = await asyncio.create_subprocess_shell(
         command,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
+        stdin=asyncio.subprocess.PIPE,
+        # stdin = asyncio.subprocess.PIPE,
+        # WARNING! STDIN must be set, or the pseudo terminal will get reused and mess up the terminal
         env=new_env,
         cwd=working_dir
     )
@@ -107,9 +116,16 @@ async def a_system_parallel(command: str, env: dict = None, working_dir=None):
             stdout=stdout,
             stderr=stderr
         )
+    # curr_state = await a_get_stty_state()
+    # if prev_state != curr_state:
+    #     logger.warning(f"stty state changed by {command}!\n PREV:{prev_state} \n CURR:{curr_state}")
+    # logger.info(f"stty state is {curr_state}")
+
     return PsResult(stdout, stderr)
 
+
 a_system = a_system_parallel
+
 
 @instance
 async def system_lock():

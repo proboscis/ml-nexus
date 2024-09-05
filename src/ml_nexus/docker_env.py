@@ -87,10 +87,10 @@ class DockerHostEnvironment(IScriptRunner):
     _storage_resolver: IStorageResolver
     _RsyncArgs: type
     _macro_install_base64_runner: Macro
-    _default_docker_host_mounter: DockerHostMounter
     _logger: object
     _env_result_download_path: Path
-    _default_docker_image_repo: str
+    _ml_nexus_default_docker_image_repo: str
+    _ml_nexus_default_docker_host_mounter: DockerHostMounter
 
     project: ProjectDef
     docker_builder: DockerBuilder
@@ -107,7 +107,7 @@ class DockerHostEnvironment(IScriptRunner):
     def __post_init__(self):
         if self.image_tag is None:
             lower_id = self.project.dirs[0].id.lower()
-            self.image_tag = f"{self._default_docker_image_repo}/{lower_id}"
+            self.image_tag = f"{self._ml_nexus_default_docker_image_repo}/{lower_id}"
         self.docker_builder = self.docker_builder.add_macro(
             self._macro_install_base64_runner
         ).add_macro(
@@ -116,7 +116,7 @@ class DockerHostEnvironment(IScriptRunner):
             ]
         )
         if self.mounter is None:
-            self.mounter = self._default_docker_host_mounter
+            self.mounter = self._ml_nexus_default_docker_host_mounter
 
         self.sync_lock = asyncio.Lock()
         self.synced = asyncio.Event()

@@ -1,6 +1,6 @@
 [project]
 name = "ml-nexus"
-version = "0.1.0"
+version = "0.1.1a15"
 
 
 
@@ -11,10 +11,10 @@ authors = [
 dependencies = [
     "tqdm",
     "pandas",
-    "pinjected",
     "toml",
     "returns",
     "beartype",
+    "pinjected>=0.2.198",
 ]
 readme = "README.md"
 requires-python = ">= 3.10"

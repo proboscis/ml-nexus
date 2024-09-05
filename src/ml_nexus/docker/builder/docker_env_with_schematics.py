@@ -27,7 +27,7 @@ class DockerEnvFromSchematics(IScriptRunner):
     _a_system: callable
     _storage_resolver: IStorageResolver
     _new_RsyncArgs: callable
-    _default_docker_host_placement: DockerHostPlacement
+    _ml_nexus_default_docker_host_placement: DockerHostPlacement
 
     project: ProjectDef
     schematics: ContainerSchematic
@@ -37,7 +37,7 @@ class DockerEnvFromSchematics(IScriptRunner):
 
     def __post_init__(self):
         if self.placement is None:
-            self.placement = self._default_docker_host_placement
+            self.placement = self._ml_nexus_default_docker_host_placement
 
     async def _rsync_mount(self, source, host_dst, mount_point, excludes):
         await self._a_system(f"ssh {self.docker_host} mkdir -p {host_dst}")

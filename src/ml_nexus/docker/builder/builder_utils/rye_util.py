@@ -152,7 +152,7 @@ async def a_separate_requirements_to_stages(
 @injected
 @asynccontextmanager
 async def a_separate_locks_to_stages(
-        a_seperate_requirements_to_stages,
+        a_separate_requirements_to_stages,
         /,
         lock_file: Path,
         prefixes=('torch', 'tensorflow', 'google'),
@@ -161,7 +161,7 @@ async def a_separate_locks_to_stages(
         lock = lock_file.read_text().split("\n")
         locks = []
 
-        async for stage, deps in a_seperate_requirements_to_stages(lock, list(prefixes) + ['other']):
+        async for stage, deps in a_separate_requirements_to_stages(lock, list(prefixes) + ['other']):
             lock = Path(tmpdir) / f"{stage}_requirements.lock"
             deps = sorted(deps)
             lock.write_text("\n".join(deps))
