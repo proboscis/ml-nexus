@@ -56,10 +56,10 @@ def local_storage_resolver_from_env(
 
 
 @instance
-def default_docker_host_mounter__from_env(ml_nexus_resource_root: Path, new_DockerHostMounter):
+def default_docker_host_mounter__from_env(ml_nexus_docker_host_resource_root: Path, new_DockerHostMounter):
     from ml_nexus.docker_env import DockerHostMounter
     return new_DockerHostMounter(
-        host_resource_root=ml_nexus_resource_root
+        host_resource_root=ml_nexus_docker_host_resource_root
     )
 
 
@@ -166,6 +166,7 @@ def __load_default_design():
 
         build_entrypoint_script=build_entrypoint_script,
         get_macro_entrypoint_installation=get_macro_entrypoint_installation,
+        ml_nexus_default_subprocess_limit=128*1024
     )
 
     return default_design

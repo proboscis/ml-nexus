@@ -69,7 +69,7 @@ class RsyncArgs:
             args = self
             excludes = args.excludes
             options = args.options
-            cmd = f"rsync -avH --progress "
+            cmd = f"rsync -avH "
             if self.hardlink:
                 cmd += f"--link-dest={args.src.to_str()} "
 

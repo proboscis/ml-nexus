@@ -1,7 +1,7 @@
 import asyncio
 import os
 import uuid
-from asyncio import TaskGroup
+from pinjected.compatibility.task_group import TaskGroup
 from dataclasses import dataclass
 
 from loguru import logger
@@ -39,19 +39,33 @@ async def stream_and_capture_output(stream, display=True, stream_id=None, color:
         stream_id = uuid.uuid4().hex[:6]
     else:
         stream_id = escape_loguru_tags(stream_id)
-    async for line in stream:
-        decoded_line = line.decode()
-        if display:
-            # logger.opt(record=True).info(decoded_line)  # Print in real-time
-            if decoded_line.endswith('\n'):
-                text = ''.join(buf) + decoded_line
-                text = escape_loguru_tags(text)
-                text = text[:-1]  # remove the newline
-                colored = f"<normal><fg {color}>[{stream_id}]</fg {color}>{text}</normal>"
-                logger.debug(colored)  # Print in real-time
-                buf = []
-            pass
-        output.append(decoded_line)
+
+    async def decode_stream():
+        nonlocal output, buf
+        async for line in stream:
+            decoded_line = line.decode()
+            if display:
+                # logger.opt(record=True).info(decoded_line)  # Print in real-time
+                if decoded_line.endswith('\n'):
+                    text = ''.join(buf) + decoded_line
+                    text = escape_loguru_tags(text)
+                    text = text[:-1]  # remove the newline
+                    try:
+                        colored = f"<normal><fg {color}>[{stream_id}]</fg {color}>{text}</normal>"
+                        logger.debug(colored)  # Print in real-time
+                    except ValueError:
+                        logger.debug(f"[{stream_id}]{text}")
+                    buf = []
+                pass
+            output.append(decoded_line)
+
+    while True:
+        try:
+            await decode_stream()
+        except ValueError as e:
+            logger.error(f"stream_and_capture_output error: {e}")
+        else:
+            break
     return ''.join(output)
 
 
@@ -74,6 +88,7 @@ class CommandException(Exception):
 @injected
 async def a_system_parallel(
         logger,
+        ml_nexus_default_subprocess_limit,
         /,
         command: str, env: dict = None, working_dir=None):
     new_env = os.environ.copy()
@@ -92,7 +107,9 @@ async def a_system_parallel(
         # stdin = asyncio.subprocess.PIPE,
         # WARNING! STDIN must be set, or the pseudo terminal will get reused and mess up the terminal
         env=new_env,
-        cwd=working_dir
+        cwd=working_dir,
+        limit=ml_nexus_default_subprocess_limit,
+
     )
 
     # Stream and capture stdout and stderr

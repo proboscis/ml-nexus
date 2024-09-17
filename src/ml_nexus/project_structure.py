@@ -1,11 +1,11 @@
 import abc
 import uuid
 from abc import ABC
-from asyncio import TaskGroup
 from dataclasses import dataclass, field, replace
 from itertools import chain
 from pathlib import Path
 from typing import Optional, Callable, Awaitable, Literal
+from pinjected.compatibility.task_group import TaskGroup
 
 
 @dataclass
