@@ -1,6 +1,8 @@
 import asyncio
 import os
 import uuid
+from typing import Protocol
+
 from pinjected.compatibility.task_group import TaskGroup
 from dataclasses import dataclass
 
@@ -28,6 +30,21 @@ def random_hex_color():
     return f"#{int(rgb[0] * 255):02x}{int(rgb[1] * 255):02x}{int(rgb[2] * 255):02x}"
 
 
+async def yield_from_stream_safe(stream):
+    async def decode_stream():
+        async for line in stream:
+            yield line
+
+    while True:
+        try:
+            async for line in decode_stream():
+                yield line
+        except ValueError as e:
+            logger.error(f"error during decoding stream: {e}")
+        else:
+            break
+
+
 async def stream_and_capture_output(stream, display=True, stream_id=None, color: str = None):
     output = []
     buf = []
@@ -40,32 +57,22 @@ async def stream_and_capture_output(stream, display=True, stream_id=None, color:
     else:
         stream_id = escape_loguru_tags(stream_id)
 
-    async def decode_stream():
-        nonlocal output, buf
-        async for line in stream:
-            decoded_line = line.decode()
-            if display:
-                # logger.opt(record=True).info(decoded_line)  # Print in real-time
-                if decoded_line.endswith('\n'):
-                    text = ''.join(buf) + decoded_line
-                    text = escape_loguru_tags(text)
-                    text = text[:-1]  # remove the newline
-                    try:
-                        colored = f"<normal><fg {color}>[{stream_id}]</fg {color}>{text}</normal>"
-                        logger.debug(colored)  # Print in real-time
-                    except ValueError:
-                        logger.debug(f"[{stream_id}]{text}")
-                    buf = []
-                pass
-            output.append(decoded_line)
-
-    while True:
-        try:
-            await decode_stream()
-        except ValueError as e:
-            logger.error(f"stream_and_capture_output error: {e}")
-        else:
-            break
+    async for line in yield_from_stream_safe(stream):
+        decoded_line = line.decode()
+        if display:
+            # logger.opt(record=True).info(decoded_line)  # Print in real-time
+            if decoded_line.endswith('\n'):
+                text = ''.join(buf) + decoded_line
+                text = escape_loguru_tags(text)
+                text = text[:-1]  # remove the newline
+                try:
+                    colored = f"<normal><fg {color}>[{stream_id}]</fg {color}>{text}</normal>"
+                    logger.debug(colored)  # Print in real-time
+                except ValueError:
+                    logger.debug(f"[{stream_id}]{text}")
+                buf = []
+            pass
+        output.append(decoded_line)
     return ''.join(output)
 
 
@@ -85,10 +92,48 @@ class CommandException(Exception):
         return self.__class__, (self.message, self.code, self.stdout, self.stderr)
 
 
+class ISystemCallEvent(Protocol):
+    id: str
+    command: str
+
+
+@dataclass
+class SystemCallStart(ISystemCallEvent):
+    id: str
+    command: str
+
+
+@dataclass
+class SystemCallEnd(ISystemCallEvent):
+    id: str
+    command: str
+    code: int
+
+
+@dataclass
+class SystemCallStdOut(ISystemCallEvent):
+    id: str
+    command: str
+    text: str
+
+
+@dataclass
+class SystemCallStdErr(ISystemCallEvent):
+    id: str
+    command: str
+    text: str
+
+
+class MLNexusSystemCallEventBus(Protocol):
+    async def __call__(self, event: ISystemCallEvent):
+        ...
+
+
 @injected
 async def a_system_parallel(
         logger,
         ml_nexus_default_subprocess_limit,
+        ml_nexus_system_call_event_bus,
         /,
         command: str, env: dict = None, working_dir=None):
     new_env = os.environ.copy()
@@ -96,6 +141,7 @@ async def a_system_parallel(
         new_env.update(env)
 
     logger.info(f"running command=>{command}")
+    await ml_nexus_system_call_event_bus(SystemCallStart(id=uuid.uuid4().hex[:6], command=command))
 
     # prev_state = await a_get_stty_state()
 
