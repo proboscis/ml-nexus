@@ -11,7 +11,7 @@ from pinjected.compatibility.task_group import TaskGroup
 @dataclass
 class ProjectDir:
     id: str
-    kind: Literal['source', 'resource', 'auto', 'rye', 'uv'] = 'auto'
+    kind: Literal['source', 'resource', 'auto', 'rye', 'uv','setup.py'] = 'auto'
     dependencies: list["ProjectDir"] = field(default_factory=list)
     excludes: list[str] = field(default_factory=list)
     extra_dependencies: list["PlatformDependantPypi"] = field(default_factory=list)

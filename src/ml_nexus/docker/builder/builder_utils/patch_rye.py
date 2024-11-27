@@ -54,7 +54,7 @@ async def patch_rye_project(
      Note:
          Please make sure to clean the 'tmp' directory, if you found something suspicious because the function won't clear the 'tmp' directory by default.
      """
-
+    # TODO remove requirements.lock
     src = await storage_resolver.locate(tgt.id)
     logger.info(f"not clearing the tmp directory for {tgt.id}. please clean this up if you found something funny.")
     with tempfile.TemporaryDirectory() as tmp_dir:

@@ -23,4 +23,8 @@ class BuildMacroContext:
 
 PureMacro = Union[str, Block, RCopy, RsyncArgs, list["Macro"]]
 CodeBuilder = Callable[[BuildMacroContext], Awaitable[PureMacro]]
-Macro = Union[str, Block, RCopy, RsyncArgs, list["Macro"], CodeBuilder]
+_Macro = str | Block | RCopy | RsyncArgs
+_MacroImpl = _Macro | CodeBuilder
+Macro = _MacroImpl | list[_MacroImpl]
+
+

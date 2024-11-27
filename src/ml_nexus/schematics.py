@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Union, Callable, AsyncContextManager
 
 from ml_nexus.docker.builder.docker_builder import DockerBuilder
-from ml_nexus.docker.builder.macros.macro_defs import Macro
+from ml_nexus.docker.builder.macros.macro_defs import Macro, _Macro
 
 
 @dataclass
@@ -43,10 +43,13 @@ class ContextualMountRequest:
     excludes: list[str] = field(default_factory=list)
 
 
-MountRequest = Union[CacheMountRequest, ResolveMountRequest, DirectMountRequest, ContextualMountRequest]
-SchematicElement = Union[MountRequest]
+@dataclass
+class ContainerScript:
+    script: str
 
-SchematicsElement = Union[MountRequest, Macro]
+
+MountRequest = Union[CacheMountRequest, ResolveMountRequest, DirectMountRequest, ContextualMountRequest]
+SchematicElement = Union[MountRequest, Macro, ContainerScript]
 
 
 @dataclass
@@ -54,7 +57,7 @@ class ContainerSchematic:
     builder: DockerBuilder
     mount_requests: list[MountRequest]
 
-    def __add__(self, other: Union[SchematicsElement, list[SchematicElement]]):
+    def __add__(self, other: Union[SchematicElement, list[SchematicElement]]):
         match other:
             case [*items]:
                 res = self
@@ -63,7 +66,11 @@ class ContainerSchematic:
                 return res
             case mount if isinstance(mount, MountRequest):
                 return replace(self, mount_requests=self.mount_requests + [mount])
-            case macro if isinstance(macro, Macro):
+            case macro if isinstance(macro, _Macro):
                 return replace(self, builder=self.builder.add_macro(macro))
+            case func if isinstance(func, Callable):
+                return replace(self, builder=self.builder.add_macro(func))
+            case ContainerScript(script):
+                return replace(self, builder=self.builder.add_script(script))
             case unk:
                 raise ValueError(f"Invalid type {type(unk)}")

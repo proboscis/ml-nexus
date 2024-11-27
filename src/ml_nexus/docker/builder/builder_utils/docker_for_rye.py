@@ -148,7 +148,13 @@ async def a_get_mount_request_for_pdir(
             rye_request = ContextualMountRequest(source=rye_impl, mount_point=placement.sources_root / pdir.id,
                                                  excludes=pdir.excludes)
             return rye_request
-
+        case 'setup.py':
+            return ResolveMountRequest(
+                kind='source',
+                resource_id=pdir.id,
+                mount_point=placement.sources_root / pdir.id,
+                excludes=pdir.excludes
+            )
         case _:
             raise ValueError(f"unknown kind {kind} for pdir {pdir.id}")
 

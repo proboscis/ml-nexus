@@ -28,7 +28,6 @@ pyenv_cache_paths = [
 
 @injected
 async def a_macro_install_pyenv(
-        /,
         python_version: str
 ):
     """

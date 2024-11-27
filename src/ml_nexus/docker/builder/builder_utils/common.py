@@ -49,6 +49,7 @@ async def gather_rsync_macros_project_def(
         patch_uv_dir,
         RsyncArgs,
         a_infer_source_kind,
+        logger,
         /,
         pro: ProjectDef) -> list[Macro]:
     res = []
@@ -64,7 +65,8 @@ async def gather_rsync_macros_project_def(
                     async with patch_uv_dir(tgt=pdir, placement=pro.placement) as patched_path:
                         yield [
                             f"#Copy patched uv project:{pdir.id}",
-                            RsyncArgs(src=patched_path, dst=pro.placement.sources_root / pdir.id, excludes=pdir.excludes)
+                            RsyncArgs(src=patched_path, dst=pro.placement.sources_root / pdir.id,
+                                      excludes=pdir.excludes)
                         ]
 
                 return macro_impl
@@ -75,10 +77,18 @@ async def gather_rsync_macros_project_def(
                     async with patch_rye_project(tgt=pdir, source_root=pro.placement.sources_root) as patched_path:
                         yield [
                             f"#Copy patched rye project:{pdir.id}",
-                            RsyncArgs(src=patched_path, dst=pro.placement.sources_root / pdir.id, excludes=pdir.excludes)
+                            RsyncArgs(src=patched_path, dst=pro.placement.sources_root / pdir.id,
+                                      excludes=pdir.excludes)
                         ]
 
                 return macro_impl
+            elif kind == "setup.py":
+                local_path = await storage_resolver.locate(pdir.id)
+                return RsyncArgs(src=local_path, dst=Path('/sources') / pdir.id, excludes=pdir.excludes)
+            elif kind == 'resource':
+                logger.info(f"resource is to be mounted so not included in the container.")
+            else:
+                raise ValueError(f"unknown kind {kind} for pdir {pdir.id}")
 
         for pdir in pro.yield_project_dirs():
             res.append(tg.create_task(task(pdir)))

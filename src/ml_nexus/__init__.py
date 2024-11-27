@@ -134,6 +134,8 @@ def __load_default_design():
     from ml_nexus.docker_env import DockerHostMounter
     from ml_nexus.docker.builder.builder_utils.docker_for_rye import build_entrypoint_script, \
         get_macro_entrypoint_installation
+    from ml_nexus.docker.builder.builder_utils.uv_project import a_macro_install_pyenv
+    from ml_nexus.docker.builder.docker_env_with_schematics import DockerEnvFromSchematics
     default_design = design(
         env_result_download_path=Path("results").expanduser(),
         # a_system=a_system_sequential,
@@ -166,7 +168,9 @@ def __load_default_design():
 
         build_entrypoint_script=build_entrypoint_script,
         get_macro_entrypoint_installation=get_macro_entrypoint_installation,
-        ml_nexus_default_subprocess_limit=128*1024
+        ml_nexus_default_subprocess_limit=128*1024,
+        a_macro_install_pyenv=a_macro_install_pyenv,
+        new_DockerEnvFromSchematics=injected(DockerEnvFromSchematics),
     )
 
     return default_design

@@ -32,6 +32,7 @@ async def schematics_with_uv(
 ) -> ContainerSchematic:
     hf_cache_mount = Path("/cache/huggingface")
     proj_dir = target.default_working_dir
+    assert target.dirs[0].kind in ['uv'], f"the first dir of the project must be uv. got {target.dirs[0].kind},{target.dirs[0].id}"
     builder = new_DockerBuilder(
         base_image=base_image,
         macros=[
