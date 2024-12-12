@@ -209,7 +209,7 @@ async def schematics_with_rye(
         ],
         scripts=[
             f"cd {target.default_working_dir}",  # WORKDIR has no effect(often overriden) on K8S, so we set it here.
-            "source $HOME/.cargo/env",
+            #"source $HOME/.cargo/env", rye no longer uses $HOME/.cargo?
             "rye sync",
             # copy the dummy
             f". {target.default_working_dir}/.venv/bin/activate",

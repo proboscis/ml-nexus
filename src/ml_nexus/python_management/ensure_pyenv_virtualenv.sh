@@ -117,8 +117,9 @@ setup_virtualenv() {
     # If directory exists but is not a valid virtualenv, back it up
     if [ -d "$VENV_PATH" ] && ! is_valid_virtualenv "$VENV_PATH"; then
         local backup_dir="${VENV_PATH}_backup_$(date +%Y%m%d_%H%M%S)"
-        log_message "Directory exists but is not a valid virtualenv. Moving to $backup_dir"
-        mv "$VENV_PATH" "$backup_dir"
+        log_message "Directory exists but is not a valid virtualenv. Removing contents in $VENV_PATH"
+        # mv "$VENV_PATH" "$backup_dir"
+        rm -rf "$VENV_PATH/*"
     fi
 
     if [ ! -d "$VENV_PATH" ] || ! is_valid_virtualenv "$VENV_PATH"; then

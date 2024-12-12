@@ -1,4 +1,3 @@
-import json
 import tempfile
 from collections import defaultdict
 from contextlib import asynccontextmanager
@@ -8,10 +7,10 @@ from typing import Iterable, AsyncContextManager
 from pinjected import *
 
 from ml_nexus.docker.builder.macros.macro_defs import Block, RCopy, Macro
-from ml_nexus.testing.test_resources import default_ignore_set
 from ml_nexus.project_structure import ProjectDef, PlatformDependantPypi, ProjectDir
 from ml_nexus.rsync_util import RsyncArgs
 from ml_nexus.storage_resolver import IStorageResolver
+from ml_nexus.testing.test_resources import default_ignore_set
 
 
 @injected
@@ -28,7 +27,7 @@ RUN rye config --set-bool use-uv=true
 RUN rye config --set-bool behavior.use-uv=true
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 RUN ["bin/bash","-c","source /opt/rye/env"]
-RUN /root/.cargo/bin/uv --version
+# RUN /root/.cargo/bin/uv --version # we the uv location might have changed
     """)
 
 
@@ -298,9 +297,17 @@ async def macro_install_staged_rye_lock(
 
 
 def get_dummy_rye_venv(project_pyproject_dir):
+    from returns.result import safe
+    @safe
+    def safe_read_text(path):
+        return path.read_text().strip()
     @asynccontextmanager
     async def impl(cxt):
-        python_version = (project_pyproject_dir / ".python-version").read_text().strip()
+        rye_venv_path = project_pyproject_dir / ".venv/rye-venv.json"
+        import json
+        import re
+        python= json.loads(rye_venv_path.read_text())['python']
+        python_version = re.search(r'cpython@(.+)',python).group(1)
         dummy_rye_venv = dict(
             python=f"cpython@{python_version}",
             venv_path=f"{project_pyproject_dir}/.venv"

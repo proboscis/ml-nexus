@@ -8,7 +8,7 @@ from pinjected import *
 from ml_nexus.docker.builder.macros.macro_defs import RCopy, Macro
 from ml_nexus.project_structure import ProjectDef
 from ml_nexus.rsync_util import RsyncArgs
-from ml_nexus.schematics import ContainerSchematic, CacheMountRequest, MountRequest
+from ml_nexus.schematics import ContainerSchematic, CacheMountRequest, MountRequest, ContainerScript
 from ml_nexus.testing import ml_nexus_test_design
 
 
@@ -87,9 +87,12 @@ class CommandWithMacro:
 
 @injected
 async def macro_install_pyenv_virtualenv_installer(
+        logger,
+        /,
         venv_name,
         venv_id: str,  # this is to ensure venv identity.
         pyenv_root: Path = Path("/root/.pyenv"),
+        pip_cache_dir: Path = Path("/root/pip_cache/pip"),
         python_version="3.12",
 ) -> CommandWithMacro:
     # we need globally unique identifier for venv path.
@@ -97,16 +100,19 @@ async def macro_install_pyenv_virtualenv_installer(
     venv_path = Path(f"/root/virtualenvs/{venv_name}_{venv_id}")
     # TODO handle multiple os/cpu architectures?
     # Currently we only assume the os is ubuntu and intel cpu.
+    if pip_cache_dir == Path("/root/.cache/pip"):
+        logger.warning(f"default pip cache dir: /root/.cache/pip is used. This is not going to work unless /root/.cache/pip is removable (Mounting docker volume to this dir won't work. mount the parent dir!)")
     command = f"""
 export PYENV_ROOT={pyenv_root}
 export PYTHON_VERSION={python_version}
 export VENV_NAME={venv_name}
 export VENV_PATH={venv_path}
+export PIP_CACHE_DIR={pip_cache_dir}
 {runnable_path}
 echo ACTIVATING VENV at {venv_path}
 source {venv_path}/bin/activate
 """
-    script_path = Path(__file__).parent.parent.parent.parent/'python_management/ensure_pyenv_virtualenv.sh'
+    script_path = Path(__file__).parent.parent.parent.parent / 'python_management/ensure_pyenv_virtualenv.sh'
     return CommandWithMacro(
         command,
         [
@@ -131,14 +137,14 @@ RUN apt-get install -y make build-essential libssl-dev zlib1g-dev \
                 f'venv_{venv_name}_{venv_id}', venv_path
             ),
             CacheMountRequest(
-                f'pyenv_pip', Path("/root/.cache/pip")
+                f'pyenv_pip', pip_cache_dir.parent
             )
         ]
     )
 
 
 @injected
-async def schematics_with_setup_py__install_on_container(
+async def schematics_with_pyvenv(
         new_DockerBuilder,
         macro_install_base64_runner,
         gather_rsync_macros_project_def,
@@ -147,18 +153,16 @@ async def schematics_with_setup_py__install_on_container(
         /,
         target: ProjectDef,
         base_image="nvidia/cuda:12.3.1-devel-ubuntu22.04",
-        python_version="3.12"
+        python_version="3.12",
 ) -> ContainerSchematic:
     """
-    This is to be used with project that only supports setup.py, due to native dependencies.
-    Use pyenv to install python version.
-    Preinstalls the project in editable mode into the container.
-    Caches are mounted.
+    This creates pyenv-virtualenv environment, during runtime.
+    Thi is to be used with persistent environments to test dependencies interactively.
+    You can use this as a base to call setup.py.
     """
     hf_cache_mount = Path("/cache/huggingface")
     target_id = target.dirs[0].id
-    assert target.dirs[
-               0].kind == 'setup.py', f"the first dir of the project must be setup.py. got {target.dirs[0].kind},{target.dirs[0].id}"
+    # assert target.dirs[0].kind == 'setup.py', f"the first dir of the project must be setup.py. got {target.dirs[0].kind},{target.dirs[0].id}"
     venv_setup: CommandWithMacro = await macro_install_pyenv_virtualenv_installer(
         venv_name=target_id,
         venv_id=sha256(target_id.encode()).hexdigest()[:6],
@@ -187,7 +191,6 @@ async def schematics_with_setup_py__install_on_container(
         scripts=[
             venv_setup.command,
             f"cd {target.default_working_dir}",  # WORKDIR has no effect(often overriden) on K8S, so we set it here.
-            f"python -m pip install -e ."
         ]
     )
     mounts = await asyncio.gather(*[a_get_mount_request_for_pdir(
@@ -207,6 +210,31 @@ async def schematics_with_setup_py__install_on_container(
             *venv_setup.volumes
         ]
     )
+
+
+@injected
+async def schematics_with_setup_py__install_on_container(
+        schematics_with_pyvenv,
+        /,
+        target: ProjectDef,
+        base_image="nvidia/cuda:12.3.1-devel-ubuntu22.04",
+        python_version="3.12",
+        run_pip_install=True
+) -> ContainerSchematic:
+    """
+    This is to be used with project that only supports setup.py, due to native dependencies.
+    Use pyenv to install python version.
+    Preinstalls the project in editable mode into the container.
+    Caches are mounted.
+    """
+    schem = await schematics_with_pyvenv(
+        target=target,
+        base_image=base_image,
+        python_version=python_version,
+    )
+    if run_pip_install:
+        schem += ContainerScript("python -m pip install -e .")
+    return schem
 
 
 __meta_design__ = design(

@@ -4,6 +4,10 @@ from typing import Any
 from pinjected import *
 from pinjected import instance
 
+from ml_nexus.storage_resolver import IdPath
+
+from pinjected.test import test_tree
+
 
 @instance
 def ml_nexus_logger():
@@ -136,6 +140,8 @@ def __load_default_design():
         get_macro_entrypoint_installation
     from ml_nexus.docker.builder.builder_utils.uv_project import a_macro_install_pyenv
     from ml_nexus.docker.builder.docker_env_with_schematics import DockerEnvFromSchematics
+    from pinjected_openai.vision_llm import a_cached_vision_llm__gpt4o
+    from ml_nexus.docker.builder.builder_utils.schematics_for_setup_py import macro_install_pyenv_virtualenv_installer
     default_design = design(
         env_result_download_path=Path("results").expanduser(),
         # a_system=a_system_sequential,
@@ -168,18 +174,26 @@ def __load_default_design():
 
         build_entrypoint_script=build_entrypoint_script,
         get_macro_entrypoint_installation=get_macro_entrypoint_installation,
-        ml_nexus_default_subprocess_limit=128*1024,
+        ml_nexus_default_subprocess_limit=128 * 1024,
         a_macro_install_pyenv=a_macro_install_pyenv,
         new_DockerEnvFromSchematics=injected(DockerEnvFromSchematics),
+        a_cached_llm_for_ml_nexus=a_cached_vision_llm__gpt4o,
+        ml_nexus_default_base_image="nvidia/cuda:12.3.1-devel-ubuntu22.04",
+        ml_nexus_default_python_version="3.12",
+        macro_install_pyenv_virtualenv_installer=macro_install_pyenv_virtualenv_installer,
     )
 
     return default_design
 
 
 load_env_design = __load_default_design
-from pinjected.test import test_tree
 
 run_tests: IProxy = test_tree()
+
+__all__ = [
+    'IdPath',
+    'load_env_design'
+]
 
 __meta_design__ = design(
     overrides=load_env_design,

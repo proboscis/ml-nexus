@@ -6,12 +6,13 @@ from itertools import chain
 from pathlib import Path
 from typing import Optional, Callable, Awaitable, Literal
 from pinjected.compatibility.task_group import TaskGroup
+import pandas as pd
 
 
 @dataclass
 class ProjectDir:
     id: str
-    kind: Literal['source', 'resource', 'auto', 'rye', 'uv','setup.py'] = 'auto'
+    kind: Literal['source', 'resource', 'auto', 'rye', 'uv', 'setup.py'] = 'auto'
     dependencies: list["ProjectDir"] = field(default_factory=list)
     excludes: list[str] = field(default_factory=list)
     extra_dependencies: list["PlatformDependantPypi"] = field(default_factory=list)
@@ -97,7 +98,10 @@ class ScriptRunContext:
     def upload_mapping(self) -> dict[Path, Path]:
         return self._upload_mapping
 
-    def with_upload(self, *local_paths) -> 'ScriptRunContext':
+    def with_upload(self,
+                    *local_paths,
+                    uploads: dict[Path, Path] = None
+                    ) -> 'ScriptRunContext':
         def parse(p):
             match p:
                 case str():
@@ -122,6 +126,11 @@ class ScriptRunContext:
             dest = self.random_remote_path() / tmp_name
             mapping[local] = dest
             mapped.append(dest)
+
+        for local, remote in (uploads or {}).items():
+            mapping[local] = remote
+            mapped.append(remote)
+
         return replace(
             self,
             _upload_mapping=self.upload_mapping | mapping
@@ -130,7 +139,8 @@ class ScriptRunContext:
     async def run_script(self, script: str) -> ScriptRunResult:
         if self.preparation is not None:
             await self.preparation()
-        run_id = uuid.uuid4().hex[:8]
+        run_time = pd.Timestamp.now().strftime("%Y%m%d%H%M%S")
+        run_id = run_time + "-" + uuid.uuid4().hex[:6]
         result_dir = self.random_remote_path()
         async with TaskGroup() as tg:
             for local, remote in self.upload_mapping.items():
@@ -155,6 +165,7 @@ export RUN_RESULT_DIR={result_dir}
         async with TaskGroup() as tg:
             for remote in self.upload_mapping.values():
                 tg.create_task(self.delete_remote(remote))
+            tg.create_task(self.delete_remote(result_dir))
         return ScriptRunResult(
             run_id=run_id,
             result_path=download_dst
@@ -172,5 +183,3 @@ class IScriptRunner(IRunner):
 
     async def run(self, command: str):
         return await self.run_script(command)
-
-

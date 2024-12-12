@@ -17,7 +17,7 @@ PatchRyeProject = Callable[[ProjectDir, Path, bool], Awaitable[Path]]
 @asynccontextmanager
 async def patch_rye_project(
         storage_resolver,
-        RsyncArgs,
+        new_RsyncArgs,
         /,
         tgt: ProjectDir,
         source_root: Path,
@@ -60,7 +60,7 @@ async def patch_rye_project(
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp_dir = Path(tmp_dir)
         dst = tmp_dir / tgt.id
-        rsync = RsyncArgs(
+        rsync = new_RsyncArgs(
             src=RsyncLocation(path=src, host="localhost"),
             dst=RsyncLocation(path=dst),
             excludes=tgt.excludes,

@@ -49,7 +49,7 @@ class DockerHostMounter:
     _storage_resolver: IStorageResolver
     _a_system: Callable
     _a_ssh_cmd: Callable
-    _RsyncArgs: type
+    _new_RsyncArgs: type
 
     host_resource_root: Path
 
@@ -60,7 +60,7 @@ class DockerHostMounter:
             source_path: Path = await self._storage_resolver.locate(dir.id)
             # await self._a_system(f"ssh {host} mkdir -p {root_path / dir.id}/")
             await self._a_ssh_cmd(host, f"mkdir -p {root_path / dir.id}/")
-            rsync: RsyncArgs = self._RsyncArgs(
+            rsync: RsyncArgs = self._new_RsyncArgs(
                 src=source_path,
                 dst=RsyncLocation(host=host, path=root_path / dir.id),
                 excludes=dir.excludes,
@@ -85,7 +85,7 @@ class DockerHostEnvironment(IScriptRunner):
     _a_system: Callable
     _a_system_parallel: Callable
     _storage_resolver: IStorageResolver
-    _RsyncArgs: type
+    _new_RsyncArgs: type
     _macro_install_base64_runner: Macro
     _logger: object
     _env_result_download_path: Path
@@ -173,7 +173,7 @@ class DockerHostEnvironment(IScriptRunner):
             await self._a_system(f"scp -r {local} {self.docker_host}:{remote}")
         else:
             await self._a_system(f"ssh {self.docker_host} mkdir -p {remote}")
-            rsync: RsyncArgs = self._RsyncArgs(
+            rsync: RsyncArgs = self._new_RsyncArgs(
                 src=local,
                 dst=RsyncLocation(host=self.docker_host, path=remote),
                 excludes=[],
