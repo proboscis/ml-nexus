@@ -11,6 +11,7 @@ from ml_nexus import load_env_design
 from ml_nexus.docker.builder.builder_utils.rye_util import get_dummy_rye_venv
 from ml_nexus.docker.builder.docker_env_with_schematics import DockerEnvFromSchematics
 from ml_nexus.docker.builder.macros.macro_defs import Macro
+from ml_nexus.docker.builder.persistent import PersistentDockerEnvFromSchematics
 from ml_nexus.project_structure import ProjectDef, ProjectDir
 from ml_nexus.schematics import MountRequest, CacheMountRequest, ContainerSchematic
 from ml_nexus.schematics_util.env_identification import SetupScriptWithDeps
@@ -358,10 +359,11 @@ test_requirements_project: IProxy = ProjectDef(
 test_schematics_req_txt: IProxy = schematics_universal(
     target=test_requirements_project
 )
-test_req_txt_docker = injected(DockerEnvFromSchematics)(
+test_req_txt_docker = injected(PersistentDockerEnvFromSchematics)(
     project=test_requirements_project,
     schematics=test_schematics_req_txt,
-    docker_host='zeus'
+    docker_host='zeus',
+    container_name='test_req_txt_docker'
 )
 test_req_txt_docker_run:IProxy = test_req_txt_docker.run_script(
     """

@@ -39,6 +39,10 @@ class PersistentDockerEnvFromSchematics(IScriptRunner):
             self._logger.info(f"Container {self.container_name} is not ready. {e}")
             return False
 
+    async def a_wait_container_ready(self):
+        while not await self.a_is_container_ready():
+            await asyncio.sleep(1)
+
     async def ensure_container(self):
         # check if the container is running
         try:
@@ -48,12 +52,19 @@ class PersistentDockerEnvFromSchematics(IScriptRunner):
                 return
         except CommandException as e:
             self._logger.warning(f"Container {self.container_name} is not running. Starting...")
-        self.container_task = asyncio.create_task(self.container.run_script(
-            "sleep infinity"
-        ))
-
-        while not await self.a_is_container_ready():
-            await asyncio.sleep(1)
+            self.container_task = asyncio.create_task(self.container.run_script(
+                "sleep infinity"
+            ))
+            # I want this to return a future to wait for container started event...
+        wait_task = asyncio.create_task(self.a_wait_container_ready())
+        done, pending = await asyncio.wait(
+            [self.container_task, wait_task],
+            return_when=asyncio.FIRST_COMPLETED,
+            timeout=10
+        )
+        for task in done:
+            self._logger.info(f"task result:{task.result()}")
+        await self.container.prepare_mounts()  # ensuring source/resource uploads
         self._logger.info(f"Container {self.container_name} is ready")
 
     async def run_script(self, script: str):
@@ -72,17 +83,17 @@ class PersistentDockerEnvFromSchematics(IScriptRunner):
 """
         base64_encoded_script = base64.b64encode(final_script.encode('utf-8')).decode()
         cmd = f"docker exec {self.container_name} bash /usr/local/bin/base64_runner.sh {base64_encoded_script}"
-        #await self._a_system(f'ssh {self.docker_host} {cmd}')
+        # await self._a_system(f'ssh {self.docker_host} {cmd}')
         await self._a_system(cmd)
 
     async def stop(self):
-        #await self._a_system(f"ssh {self.docker_host} docker stop {self.container_name}")
+        # await self._a_system(f"ssh {self.docker_host} docker stop {self.container_name}")
         await self._a_system(f"docker stop {self.container_name}")
 
     async def upload(self, local_path: Path, remote_path: Path):
         await self.ensure_container()
         # ensure path exists
-        #await self._a_system(f"ssh {self.docker_host} docker exec {self.container_name} mkdir -p {remote_path.parent}")
+        # await self._a_system(f"ssh {self.docker_host} docker exec {self.container_name} mkdir -p {remote_path.parent}")
         await self._a_system(f"docker exec {self.container_name} mkdir -p {remote_path.parent}")
         # wait, this copies file from the docker_host, hmm..
         await self._a_system(f"docker cp {local_path} {self.container_name}:{remote_path}")
@@ -93,7 +104,7 @@ class PersistentDockerEnvFromSchematics(IScriptRunner):
 
     async def delete(self, remote_path: Path):
         await self.ensure_container()
-        #await self._a_system(f"ssh {self.docker_host} docker exec {self.container_name} rm -rf {remote_path}")
+        # await self._a_system(f"ssh {self.docker_host} docker exec {self.container_name} rm -rf {remote_path}")
         await self._a_system(f"docker exec {self.container_name} rm -rf {remote_path}")
 
     async def sync_from_container(self, remote_path: Path, local_path: Path):

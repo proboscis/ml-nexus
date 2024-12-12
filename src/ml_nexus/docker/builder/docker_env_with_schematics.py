@@ -56,6 +56,18 @@ class DockerEnvFromSchematics(IScriptRunner):
         )
 
     async def _new_env(self):
+        mounts = await self.prepare_mounts()
+
+        return self._new_DockerHostEnvironment(
+            project=self.project,
+            docker_builder=self.schematics.builder,
+            docker_host=self.docker_host,
+            additional_mounts=mounts,
+            pinjected_additional_args=self.pinjected_additional_args,
+            docker_options=self.docker_options
+        )
+
+    async def prepare_mounts(self):
         mounts = []
         from pinjected.compatibility.task_group import TaskGroup
         mount_tasks = []
@@ -101,15 +113,7 @@ class DockerEnvFromSchematics(IScriptRunner):
                         raise ValueError(f"Invalid mount request {mount}")
         for task in mount_tasks:
             mounts.append(await task)
-
-        return self._new_DockerHostEnvironment(
-            project=self.project,
-            docker_builder=self.schematics.builder,
-            docker_host=self.docker_host,
-            additional_mounts=mounts,
-            pinjected_additional_args=self.pinjected_additional_args,
-            docker_options=self.docker_options
-        )
+        return mounts
 
     async def sync_direct(self, excludes, mount_point, source):
         hash_name = hashlib.sha256(str(source).encode()).hexdigest()[:32]
