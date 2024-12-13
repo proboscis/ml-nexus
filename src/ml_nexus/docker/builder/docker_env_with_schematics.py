@@ -55,7 +55,7 @@ class DockerEnvFromSchematics(IScriptRunner):
             target=mount_point
         )
 
-    async def _new_env(self):
+    async def _new_env(self)->DockerHostEnvironment:
         mounts = await self.prepare_mounts()
 
         return self._new_DockerHostEnvironment(
@@ -123,3 +123,7 @@ class DockerEnvFromSchematics(IScriptRunner):
     async def run_script(self, script: str):
         env = (await self._new_env())
         return await env.run_script(script)
+
+    async def run_script_without_init(self,script:str):
+        env = (await self._new_env())
+        return await env.run_script_without_init(script)

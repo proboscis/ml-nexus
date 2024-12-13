@@ -157,6 +157,11 @@ class DockerHostEnvironment(IScriptRunner):
         cmd = await self.build_docker_cmd(f"bash /usr/local/bin/base64_runner.sh {base64_encoded_script}")
         await self._a_system_parallel(f'ssh {self.docker_host} {cmd}')
 
+    async def run_script_without_init(self, script):
+        base64_encoded_script = base64.b64encode(script.encode('utf-8')).decode()
+        cmd = await self.build_docker_cmd(f"bash /usr/local/bin/base64_runner.sh {base64_encoded_script}")
+        await self._a_system_parallel(f'ssh {self.docker_host} {cmd}')
+
     def container_path_to_host_path(self, path):
         return Path(
             str(path).replace(

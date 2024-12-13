@@ -49,10 +49,11 @@ class PersistentDockerEnvFromSchematics(IScriptRunner):
             res: PsResult = await self._a_system(f"ssh {self.docker_host} docker ps | grep {self.container_name}")
             if self.container_name in res.stdout:
                 self._logger.info(f"Container {self.container_name} is already running")
+                await self.container.prepare_mounts()  # ensuring source/resource uploads
                 return
         except CommandException as e:
             self._logger.warning(f"Container {self.container_name} is not running. Starting...")
-            self.container_task = asyncio.create_task(self.container.run_script(
+            self.container_task = asyncio.create_task(self.container.run_script_without_init(
                 "sleep infinity"
             ))
             # I want this to return a future to wait for container started event...

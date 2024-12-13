@@ -235,7 +235,7 @@ async def a_component_to_install_requirements_txt(
             common_packages.append(p)
     logger.info(f"common packages:{common_packages}")
     logger.info(f"special packages:{special_packages}")
-    common_packages_str = " ".join([f"'{pkg}'" for pkg in common_packages])
+    common_packages_str = " ".join([f"'{pkg}'" for pkg in common_packages if pkg])
     special_install_lines = ""
     for p in special_packages:
         special_install_lines += f"pip install {p} --no-dependencies\n"
@@ -244,6 +244,7 @@ async def a_component_to_install_requirements_txt(
         cd {target.default_working_dir}
         pip install {common_packages_str}
         {special_install_lines}
+        echo "requirements.txt installed"
         """
     )
     return EnvComponent(
