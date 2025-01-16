@@ -3,6 +3,7 @@ import inspect
 import os
 import shlex
 from contextlib import asynccontextmanager
+from hashlib import md5
 
 from pinjected.compatibility.task_group import TaskGroup
 from dataclasses import replace
@@ -16,6 +17,7 @@ from pinjected import *
 
 from ml_nexus.assertions import is_async_context_manager
 from ml_nexus import load_env_design
+from ml_nexus.docker.asyncio_lock import KeyedLock
 from ml_nexus.docker.builder.builder_utils.docker_contexts import a_docker_push__local
 from ml_nexus.docker.builder.macros.macro_defs import Block, RCopy, BuildMacroContext, Macro
 from ml_nexus.path_util import path_hash
@@ -187,12 +189,16 @@ class BuildImageWithMacro:
     async def __call__(self, code, tag, push=False, use_cache=True, build_id=None):
         pass
 
+@instance
+async def docker_build_keyed_lock()->KeyedLock:
+    return KeyedLock()
 
 @injected
 @asynccontextmanager
 async def prepare_build_context_with_macro(
         a_system,
         logger,
+        docker_build_keyed_lock: KeyedLock,
         /,
         code: list[Union[str, Block, RCopy, RsyncArgs]],
 
@@ -254,6 +260,7 @@ async def prepare_build_context_with_macro(
 
                 new_docker_file = await parse(code)
 
+            docker_file_hash = md5(new_docker_file.encode()).hexdigest()
             dockerfile_path = tmpdir / "Dockerfile"
             dockerfile_path.write_text(new_docker_file)
 
@@ -275,7 +282,8 @@ async def prepare_build_context_with_macro(
                     f"""osascript -e 'tell application "iTerm" to create window with default profile' -e 'tell application "iTerm" to tell current session of current window to write text "cd {tmpdir}"'"""
                 )
                 await asyncio.sleep(100000)
-            yield cxt
+            async with docker_build_keyed_lock.lock(dockerfile_path):
+                yield cxt
         finally:
             async with TaskGroup() as tg:
                 for macro in macros_in_context:
