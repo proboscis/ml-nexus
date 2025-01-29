@@ -258,7 +258,7 @@ async def ml_nexus_system_call_event_bus() -> MLNexusSystemCallEventBus:
 @instance
 async def ml_nexus_system_call_semaphore():
     from asyncio import Semaphore
-    return Semaphore(10)
+    return Semaphore(20)
 
 
 @injected
