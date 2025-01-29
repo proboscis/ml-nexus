@@ -199,6 +199,7 @@ async def prepare_build_context_with_macro(
         a_system,
         logger,
         docker_build_keyed_lock: KeyedLock,
+        a_calculate_build_context_hash,
         /,
         code: list[Union[str, Block, RCopy, RsyncArgs]],
 
@@ -282,12 +283,47 @@ async def prepare_build_context_with_macro(
                     f"""osascript -e 'tell application "iTerm" to create window with default profile' -e 'tell application "iTerm" to tell current session of current window to write text "cd {tmpdir}"'"""
                 )
                 await asyncio.sleep(100000)
-            async with docker_build_keyed_lock.lock(dockerfile_path):
+            context_hash = await a_calculate_build_context_hash(tmpdir)
+            logger.debug(f"Build context hash: {context_hash}")
+            async with docker_build_keyed_lock.lock(str(dockerfile_path)):
                 yield cxt
         finally:
             async with TaskGroup() as tg:
                 for macro in macros_in_context:
                     tg.create_task(macro.__aexit__(None, None, None))
+
+
+@injected
+async def a_calculate_build_context_hash(
+        logger,
+        /,
+        context_dir: Path
+) -> str:
+    """ビルドコンテキストディレクトリ全体のハッシュを計算する
+
+    Args:
+        context_dir (Path): ビルドコンテキストのディレクトリパス
+        logger: ロガーインスタンス
+
+    Returns:
+        str: ビルドコンテキストのハッシュ値（MD5）
+
+    Note:
+        - 各ファイルのパスとハッシュを組み合わせて計算
+        - ファイルの順序に依存しない一貫したハッシュを生成
+    """
+    context_files = []
+    for root, _, files in os.walk(context_dir):
+        for file in files:
+            file_path = Path(root) / file
+            if file_path.is_file():
+                rel_path = file_path.relative_to(context_dir)
+                file_hash = md5(file_path.read_bytes()).hexdigest()
+                context_files.append(f"{rel_path}:{file_hash}")
+    
+    # ファイルの順序に依存しないようにソート
+    context_files.sort()
+    return md5("\n".join(context_files).encode()).hexdigest()
 
 
 @injected
@@ -310,6 +346,37 @@ async def build_image_with_macro(
         cache_opt = "--no-cache" if not use_cache else ""
         await a_build_docker(tag=tag, context_dir=cxt.build_dir, options=cache_opt, push=push, build_id=build_id)
         return tag
+
+@injected
+async def _test_build_context_hash(
+        a_calculate_build_context_hash,
+        logger,
+        /
+):
+    with TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir)
+        
+        # テストファイルを作成
+        (tmpdir / "file1.txt").write_text("content1")
+        (tmpdir / "dir1").mkdir()
+        (tmpdir / "dir1" / "file2.txt").write_text("content2")
+        
+        # 同じ内容で順序の異なるケースをテスト
+        hash1 = await a_calculate_build_context_hash(tmpdir)
+        
+        # ファイルを追加して再テスト
+        (tmpdir / "file3.txt").write_text("content3")
+        hash2 = await a_calculate_build_context_hash(tmpdir)
+        
+        # ハッシュが異なることを確認
+        assert hash1 != hash2, "ハッシュは異なるべき"
+        
+        return "Build context hash test passed"
+# ビルドコンテキストハッシュのテスト
+with design(
+    docker_build_name="test_build_context_hash"
+):
+    test_build_context_hash: str = _test_build_context_hash()
 
 
 simple_macro = [
