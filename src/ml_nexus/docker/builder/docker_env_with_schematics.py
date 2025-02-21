@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -28,6 +29,7 @@ class DockerEnvFromSchematics(IScriptRunner):
     _storage_resolver: IStorageResolver
     _new_RsyncArgs: callable
     _ml_nexus_default_docker_host_placement: DockerHostPlacement
+    _logger: object
 
     project: ProjectDef
     schematics: ContainerSchematic
@@ -39,9 +41,15 @@ class DockerEnvFromSchematics(IScriptRunner):
     def __post_init__(self):
         if self.placement is None:
             self.placement = self._ml_nexus_default_docker_host_placement
+        self.sem = asyncio.Semaphore(5)
+
+    async def _mkdir(self, host_dst):
+        async with self.sem:
+            await self._a_system(f"ssh {self.docker_host} mkdir -p {host_dst}")
 
     async def _rsync_mount(self, source, host_dst, mount_point, excludes):
-        await self._a_system(f"ssh {self.docker_host} mkdir -p {host_dst}")
+        self._logger.info(f"Syncing {source} to {host_dst}, {mount_point}")
+        await self._mkdir(host_dst)
         rsync = self._new_RsyncArgs(src=source,
                                     dst=RsyncLocation(
                                         host_dst,
@@ -55,7 +63,7 @@ class DockerEnvFromSchematics(IScriptRunner):
             target=mount_point
         )
 
-    async def _new_env(self)->DockerHostEnvironment:
+    async def _new_env(self) -> DockerHostEnvironment:
         mounts = await self.prepare_mounts()
 
         return self._new_DockerHostEnvironment(
@@ -74,13 +82,15 @@ class DockerEnvFromSchematics(IScriptRunner):
 
         async def task_impl(cmr: ContextualMountRequest):
             async with cmr.source() as host_src:
-                return await self.sync_direct(cmr.excludes, cmr.mount_point, host_src)
+                res= await self.sync_direct(cmr.excludes, cmr.mount_point, host_src, unique_id=str(cmr.mount_point))
+                return res
+
 
         async with TaskGroup() as tg:
             for mount in self.schematics.mount_requests:
                 match mount:
                     case CacheMountRequest(name, mount_point):
-                        await self._a_system(f"ssh {self.docker_host} mkdir -p {self.placement.cache_root / name}")
+                        await self._mkdir(self.placement.cache_root / name)
                         mounts.append(DockerMount(
                             source=self.placement.cache_root / name,
                             target=mount_point
@@ -115,8 +125,11 @@ class DockerEnvFromSchematics(IScriptRunner):
             mounts.append(await task)
         return mounts
 
-    async def sync_direct(self, excludes, mount_point, source):
-        hash_name = hashlib.sha256(str(source).encode()).hexdigest()[:32]
+    async def sync_direct(self, excludes, mount_point, source, unique_id: str = None):
+        if unique_id is not None:
+            hash_name = hashlib.sha256(str(unique_id).encode()).hexdigest()[:32]
+        else:
+            hash_name = hashlib.sha256(str(source).encode()).hexdigest()[:32]
         host_dst = self.placement.direct_root / hash_name
         return await self._rsync_mount(source, host_dst, mount_point, excludes)
 
@@ -124,6 +137,6 @@ class DockerEnvFromSchematics(IScriptRunner):
         env = (await self._new_env())
         return await env.run_script(script)
 
-    async def run_script_without_init(self,script:str):
+    async def run_script_without_init(self, script: str):
         env = (await self._new_env())
         return await env.run_script_without_init(script)

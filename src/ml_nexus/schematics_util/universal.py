@@ -179,7 +179,7 @@ async def a_rye_component(
         installation_macro=[
             await docker__install_rye(),
             f"WORKDIR {project_workdir}",
-            get_dummy_rye_venv(local_project_dir)
+            get_dummy_rye_venv(local_project_dir) # is it alright to do this in Dockerfile? wont this get overwritten?
         ],
         init_script=[
             f"cd {project_workdir}",

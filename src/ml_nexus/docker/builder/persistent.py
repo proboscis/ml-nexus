@@ -1,13 +1,36 @@
 import asyncio
 import base64
+import json
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
+import pandas as pd
+from pinjected import *
+
 from ml_nexus.docker.builder.docker_env_with_schematics import DockerEnvFromSchematics
 from ml_nexus.project_structure import IScriptRunner, ProjectDef, ScriptRunContext
 from ml_nexus.schematics import ContainerSchematic
-from ml_nexus.util import PsResult, CommandException
+
+
+@injected
+async def a_docker_ps(
+        logger,
+        /,
+        docker_host
+):
+    # ps: PsResult = await a_system(f"ssh {docker_host} \"docker ps -a --format '{{{{json .}}}}'\"")
+    ps = await asyncio.subprocess.create_subprocess_shell(
+        f"ssh {docker_host} \"docker ps -a --format '{{{{json .}}}}'\"",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE
+    )
+    stdout, stderr = await ps.communicate()
+
+    data = [json.loads(line.strip()) for line in stdout.decode().split("\n") if line.strip()]
+    df = pd.DataFrame(data)
+    df.set_index("Names", inplace=True)
+    return df
 
 
 @dataclass
@@ -16,6 +39,7 @@ class PersistentDockerEnvFromSchematics(IScriptRunner):
     _a_system: callable
     _logger: object
     _env_result_download_path: Path
+    _a_docker_ps: callable
 
     project: ProjectDef
     schematics: ContainerSchematic
@@ -30,13 +54,23 @@ class PersistentDockerEnvFromSchematics(IScriptRunner):
             docker_options=["--name", self.container_name]
         )
         self.container_task = None
+        self.container_wait_lock = asyncio.Lock()
 
     async def a_is_container_ready(self):
-        try:
-            ps: PsResult = await self._a_system(f"docker exec {self.container_name} echo 'hello'")
-            return True
-        except Exception as e:
-            self._logger.info(f"Container {self.container_name} is not ready. {e}")
+        async with self.container_wait_lock:
+            # self._logger.info(f"Checking if container {self.container_name} is ready")
+            ps_table = await self._a_docker_ps(docker_host=self.docker_host)
+            # self._logger.info(f"ps_table: {ps_table}")
+            if self.container_name not in ps_table.index:
+                # self._logger.warning(f"Container {self.container_name} not found in ps table")
+                return False
+            # self._logger.info(f"Container {self.container_name} found in ps table:{ps_table.index}")
+            row = ps_table.loc[self.container_name]
+            # self._logger.info(f"Container {self.container_name} row: {row}")
+            state = row["State"]
+            # self._logger.info(f"Container {self.container_name} status: {status}")
+            if state == "running":
+                return True
             return False
 
     async def a_wait_container_ready(self):
@@ -45,26 +79,14 @@ class PersistentDockerEnvFromSchematics(IScriptRunner):
 
     async def ensure_container(self):
         # check if the container is running
-        try:
-            res: PsResult = await self._a_system(f"ssh {self.docker_host} docker ps | grep {self.container_name}")
-            if self.container_name in res.stdout:
-                self._logger.info(f"Container {self.container_name} is already running")
-                await self.container.prepare_mounts()  # ensuring source/resource uploads
-                return
-        except CommandException as e:
+        if await self.a_is_container_ready():
+            self._logger.info(f"Container {self.container_name} is already running")
+        else:
             self._logger.warning(f"Container {self.container_name} is not running. Starting...")
             self.container_task = asyncio.create_task(self.container.run_script_without_init(
                 "sleep infinity"
             ))
-            # I want this to return a future to wait for container started event...
-        wait_task = asyncio.create_task(self.a_wait_container_ready())
-        done, pending = await asyncio.wait(
-            [self.container_task, wait_task],
-            return_when=asyncio.FIRST_COMPLETED,
-            timeout=10
-        )
-        for task in done:
-            self._logger.info(f"task result:{task.result()}")
+        await self.a_wait_container_ready()
         await self.container.prepare_mounts()  # ensuring source/resource uploads
         self._logger.info(f"Container {self.container_name} is ready")
 

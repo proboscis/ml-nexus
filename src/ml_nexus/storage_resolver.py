@@ -85,7 +85,7 @@ class DirectoryStorageResolver(IStorageResolver):
         return self.id_to_path[id]
 
     async def sync(self):
-        for sub_dir in self.root.iterdir():
+        for sub_dir in tqdm(self.root.iterdir(),f"scanning {self.root}"):
             if sub_dir.is_dir():
                 self.id_to_path[sub_dir.name] = sub_dir.absolute()
 

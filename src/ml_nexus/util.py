@@ -316,7 +316,7 @@ async def a_system_parallel(
             # logger.success(f"command <<{command}>> finished with ExitCode:{result}")
             pass
         if result != 0:
-            logger.error(f"command: <<{command}>> failed with code {result}.")
+            # logger.error(f"command: <<{command}>> failed with code {result}.")
             raise CommandException(
                 f"command: <<{command}>> failed with code {result}."
                 f"\nstdout: {stdout}"

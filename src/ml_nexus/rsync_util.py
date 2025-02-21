@@ -63,6 +63,8 @@ class RsyncArgs:
                 return RsyncLocation(Path(path), host)
             case str():
                 return RsyncLocation(Path(tgt))
+            case _:
+                raise ValueError(f"unexpected type {type(tgt)}")
 
     async def run(self):
         async with self._rsync_semaphore:
