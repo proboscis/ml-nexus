@@ -1,6 +1,6 @@
 [project]
 name = "ml-nexus"
-version = "0.1.6a20"
+version = "0.1.7"
 
 
 
@@ -15,7 +15,7 @@ dependencies = [
     "toml",
     "returns",
     "beartype",
-    "pinjected-openai @ file:///Users/s22625/repos/pinjected-openai",
+    "pinjected-openai @ git+https://github.com/proboscis/pinjected_openai.git@v1.0.0",
     "pinjected>=0.2.210",
 ]
 readme = "README.md"
