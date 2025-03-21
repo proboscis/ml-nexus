@@ -1,0 +1,40 @@
+[project]
+name = "ml-nexus"
+version = "0.1.8"
+
+
+
+
+description = "Define project structure and dependencies for ML Nexus."
+authors = [
+    { name = "proboscis"}
+]
+dependencies = [
+    "tqdm",
+    "pandas",
+    "toml",
+    "returns",
+    "beartype",
+    "pinjected-openai @ git+https://github.com/proboscis/pinjected_openai.git",
+    "pinjected>=0.2.246",
+    "tomlkit>=0.13.2",
+]
+readme = "README.md"
+requires-python = ">= 3.10"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.rye]
+managed = true
+dev-dependencies = [
+    "setuptools<72.0.0",
+]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ml_nexus"]
+
