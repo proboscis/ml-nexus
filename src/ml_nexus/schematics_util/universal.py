@@ -19,6 +19,7 @@ from ml_nexus.schematics import MountRequest, CacheMountRequest, ContainerSchema
 from ml_nexus.schematics_util.env_identification import SetupScriptWithDeps
 from ml_nexus.storage_resolver import IStorageResolver
 from typing import Sequence
+
 """
 We create a function that generates a schematics for universal project structure.
 
@@ -242,9 +243,11 @@ async def a_uv_component(
         init_script=[
             f"cd {target.default_working_dir}",  # WORKDIR has no effect on K8S, so we set it here.
             "source $HOME/.cargo/env",
+            f"RANDOM_ID=$(date +%s)",
+            f"export VIRTUAL_ENV=/root/.cache/uv_venv/$RANDOM_ID",
             "uv --version",
             "uv sync",
-            f"source {target.default_working_dir / '.venv/bin/activate'}"
+            f"source '$VIRTUAL_ENV/bin/activate'"
         ],
         mounts=caches
     )
