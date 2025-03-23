@@ -345,7 +345,7 @@ async def build_image_with_macro(
     ) as cxt:
         cxt: BuildMacroContext
         cmd_options = options if options else ""
-        cmd_options += " ---buildkit" if use_cache else ""
+        cmd_options += " --buildkit" if use_cache else ""
         await a_build_docker(tag=tag, context_dir=cxt.build_dir, options=cmd_options, push=push, build_id=build_id)
         return tag
 
