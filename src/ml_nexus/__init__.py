@@ -67,15 +67,15 @@ def default_docker_host_mounter__from_env(ml_nexus_docker_host_resource_root: Pa
     )
 
 
-@instance
-def ml_nexus_default_docker_image_repo__from_env(ml_nexus_logger):
-    import os
-    if "ML_NEXUS_DEFAULT_DOCKER_IMAGE_REPO" in os.environ:
-        ml_nexus_logger.info(f"Using docker image repo from env: {os.environ['ML_NEXUS_DEFAULT_DOCKER_IMAGE_REPO']}")
-        return os.environ["ML_NEXUS_DEFAULT_DOCKER_IMAGE_REPO"]
-    else:
-        raise Exception(
-            "ML_NEXUS_DEFAULT_DOCKER_IMAGE_REPO not found in env. please set 'ml_nexus_default_docker_image_repo' in __meta_design__ or set the env var")
+# @instance
+# def ml_nexus_default_docker_image_repo__from_env(ml_nexus_logger):
+#     import os
+#     if "ML_NEXUS_DEFAULT_DOCKER_IMAGE_REPO" in os.environ:
+#         ml_nexus_logger.info(f"Using docker image repo from env: {os.environ['ML_NEXUS_DEFAULT_DOCKER_IMAGE_REPO']}")
+#         return os.environ["ML_NEXUS_DEFAULT_DOCKER_IMAGE_REPO"]
+#     else:
+#         raise Exception(
+#             "ML_NEXUS_DEFAULT_DOCKER_IMAGE_REPO not found in env. please set 'ml_nexus_default_docker_image_repo' in __meta_design__ or set the env var")
 
 
 @injected
@@ -160,9 +160,8 @@ def __load_default_design():
         new_RsyncArgs=injected(RsyncArgs),
 
         ml_nexus_debug_docker_build=True,
-        ml_nexus_default_docker_host_upload_root=ml_nexus_get_env_path("ML_NEXUS_DEFAULT_DOCKER_HOST_UPLOAD_ROOT",
-                                                                       "/tmp/ml_nexus"),
-        ml_nexus_default_docker_image_repo=ml_nexus_default_docker_image_repo__from_env,
+        # ml_nexus_default_docker_host_upload_root=ml_nexus_get_env_path("ML_NEXUS_DEFAULT_DOCKER_HOST_UPLOAD_ROOT",
+        #                                                                "/tmp/ml_nexus"),
         # docker host mounter
         ml_nexus_default_docker_host_mounter=default_docker_host_mounter__from_env,
         ml_nexus_default_docker_host_placement=ml_nexus_default_docker_host_placement__from_env,

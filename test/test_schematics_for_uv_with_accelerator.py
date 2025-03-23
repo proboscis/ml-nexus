@@ -78,6 +78,7 @@ local_docker_env = injected(DockerEnvFromSchematics)(
         direct_root=Path('/tmp/direct_root')
     )
 )
+run_python_zeus:IProxy = remote_docker_env.run_script('python -c "import torch; import basicsr; print(torch.__version__)"')
 
 test_run_script = to_pytest(run_script_zeus)
 
