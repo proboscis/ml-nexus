@@ -43,6 +43,8 @@ class DockerBuilder:
     scripts: list[str] = field(default_factory=list)
     name: Optional[str] = None
     metadata: dict = None
+    platform: str = "linux/amd64"
+
 
     def __post_init__(self):
         """
@@ -94,7 +96,8 @@ class DockerBuilder:
                 macros,
                 tag,
                 use_cache=use_cache,
-                build_id=self.name
+                build_id=self.name,
+                options=" --platform " + self.platform
             )
             self.built.set()
             return res

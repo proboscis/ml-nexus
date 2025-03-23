@@ -1,5 +1,8 @@
+from pathlib import Path
 from pinjected import DesignSpec, SimpleBindSpec
 from pinjected.di.design_spec.protocols import BindSpec
+
+from ml_nexus.storage_resolver import IStorageResolver
 
 def type_validator(t):
     def validator(value):

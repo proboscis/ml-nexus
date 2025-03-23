@@ -186,7 +186,7 @@ async def a_build_docker_no_buildkit(
 
 
 class BuildImageWithMacro:
-    async def __call__(self, code, tag, push=False, use_cache=True, build_id=None):
+    async def __call__(self, code, tag, push=False, use_cache=True, build_id=None, options=""):
         pass
 
 @instance
@@ -335,7 +335,8 @@ async def build_image_with_macro(
         tag,
         push=False,
         use_cache=True,
-        build_id: str = None
+        build_id: str = None,
+        options: str = ""
 ):
 
     assert isinstance(code, list), f"code must be a list of macro. but got {type(code)}"
@@ -343,8 +344,9 @@ async def build_image_with_macro(
             code
     ) as cxt:
         cxt: BuildMacroContext
-        cache_opt = "--no-cache" if not use_cache else ""
-        await a_build_docker(tag=tag, context_dir=cxt.build_dir, options=cache_opt, push=push, build_id=build_id)
+        cmd_options = options if options else ""
+        cmd_options += " ---buildkit" if use_cache else ""
+        await a_build_docker(tag=tag, context_dir=cxt.build_dir, options=cmd_options, push=push, build_id=build_id)
         return tag
 
 @injected
