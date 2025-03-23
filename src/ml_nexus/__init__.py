@@ -15,35 +15,35 @@ def ml_nexus_logger():
     return logger
 
 
-@instance
-def ml_nexus_source_root__from_env(ml_nexus_logger):
-    logger = ml_nexus_logger
-    import os
-    if "ML_NEXUS_SOURCE_ROOT" in os.environ:
-        source_root = Path(os.environ["ML_NEXUS_SOURCE_ROOT"])
-        logger.info(f"Source root set from env(ML_NEXUS_SOURCE_ROOT): {source_root}")
-    else:
-        logger.info(f"Source root not set in env:ML_NEXUS_SOURCE_ROOT")
-        source_root = Path("~/sources").expanduser()
-        logger.info(f"using default source root: {source_root}")
-        logger.info(f"Note: you can override 'ml_nexus_source_root' in __meta_design__")
-    return source_root
+# @instance
+# def ml_nexus_source_root__from_env(ml_nexus_logger):
+#     logger = ml_nexus_logger
+#     import os
+#     if "ML_NEXUS_SOURCE_ROOT" in os.environ:
+#         source_root = Path(os.environ["ML_NEXUS_SOURCE_ROOT"])
+#         logger.info(f"Source root set from env(ML_NEXUS_SOURCE_ROOT): {source_root}")
+#     else:
+#         logger.info(f"Source root not set in env:ML_NEXUS_SOURCE_ROOT")
+#         source_root = Path("~/sources").expanduser()
+#         logger.info(f"using default source root: {source_root}")
+#         logger.info(f"Note: you can override 'ml_nexus_source_root' in __meta_design__")
+#     return source_root
 
 
-@instance
-def ml_nexus_resource_root__from_env(ml_nexus_logger):
-    logger = ml_nexus_logger
-    import os
-    if "ML_NEXUS_RESOURCE_ROOT" in os.environ:
-        resource_root = Path(os.environ["ML_NEXUS_RESOURCE_ROOT"])
-        logger.info(f"Resource root set from env(ML_NEXUS_RESOURCE_ROOT): {resource_root}")
-    else:
-        logger.info(f"Resource root not set in env:ML_NEXUS_RESOURCE_ROOT")
-        resource_root = Path("~/resources").expanduser()
-        logger.info(f"using default resource root: {resource_root}")
-        logger.info(f"Note: you can override 'ml_nexus_resource_root' in __meta_design__")
-    return resource_root
-
+# @instance
+# def ml_nexus_resource_root__from_env(ml_nexus_logger):
+#     logger = ml_nexus_logger
+#     import os
+#     if "ML_NEXUS_RESOURCE_ROOT" in os.environ:
+#         resource_root = Path(os.environ["ML_NEXUS_RESOURCE_ROOT"])
+#         logger.info(f"Resource root set from env(ML_NEXUS_RESOURCE_ROOT): {resource_root}")
+#     else:
+#         logger.info(f"Resource root not set in env:ML_NEXUS_RESOURCE_ROOT")
+#         resource_root = Path("~/resources").expanduser()
+#         logger.info(f"using default resource root: {resource_root}")
+#         logger.info(f"Note: you can override 'ml_nexus_resource_root' in __meta_design__")
+#     return resource_root
+#
 
 @instance
 def local_storage_resolver_from_env(
@@ -59,12 +59,12 @@ def local_storage_resolver_from_env(
     return DirectoryStorageResolver(ml_nexus_source_root) + DirectoryStorageResolver(ml_nexus_resource_root)
 
 
-@instance
-def default_docker_host_mounter__from_env(ml_nexus_docker_host_resource_root: Path, new_DockerHostMounter):
-    from ml_nexus.docker_env import DockerHostMounter
-    return new_DockerHostMounter(
-        host_resource_root=ml_nexus_docker_host_resource_root
-    )
+# @instance
+# def default_docker_host_mounter__from_env(ml_nexus_docker_host_resource_root: Path, new_DockerHostMounter):
+#     from ml_nexus.docker_env import DockerHostMounter
+#     return new_DockerHostMounter(
+#         host_resource_root=ml_nexus_docker_host_resource_root
+#     )
 
 
 # @instance
@@ -103,16 +103,16 @@ def ml_nexus_get_env_path(ml_nexus_logger, /, key: str, default: Path | str) -> 
             return Path(default)
 
 
-@instance
-def ml_nexus_default_docker_host_placement__from_env(ml_nexus_default_docker_host_upload_root: Path):
-    from ml_nexus.docker.builder.docker_env_with_schematics import DockerHostPlacement
-
-    return DockerHostPlacement(
-        cache_root=ml_nexus_default_docker_host_upload_root / "cache",
-        resource_root=ml_nexus_default_docker_host_upload_root / "resources",
-        source_root=ml_nexus_default_docker_host_upload_root / "sources",
-        direct_root=ml_nexus_default_docker_host_upload_root
-    )
+# @instance
+# def ml_nexus_default_docker_host_placement__from_env(ml_nexus_default_docker_host_upload_root: Path):
+#     from ml_nexus.docker.builder.docker_env_with_schematics import DockerHostPlacement
+#
+#     return DockerHostPlacement(
+#         cache_root=ml_nexus_default_docker_host_upload_root / "cache",
+#         resource_root=ml_nexus_default_docker_host_upload_root / "resources",
+#         source_root=ml_nexus_default_docker_host_upload_root / "sources",
+#         direct_root=ml_nexus_default_docker_host_upload_root
+#     )
 
 
 @instance
@@ -163,11 +163,11 @@ def __load_default_design():
         # ml_nexus_default_docker_host_upload_root=ml_nexus_get_env_path("ML_NEXUS_DEFAULT_DOCKER_HOST_UPLOAD_ROOT",
         #                                                                "/tmp/ml_nexus"),
         # docker host mounter
-        ml_nexus_default_docker_host_mounter=default_docker_host_mounter__from_env,
-        ml_nexus_default_docker_host_placement=ml_nexus_default_docker_host_placement__from_env,
+        # ml_nexus_default_docker_host_mounter=default_docker_host_mounter__from_env,
+        # ml_nexus_default_docker_host_placement=ml_nexus_default_docker_host_placement__from_env,
         # ENV Vars
-        ml_nexus_source_root=ml_nexus_source_root__from_env,
-        ml_nexus_resource_root=ml_nexus_resource_root__from_env,
+        # ml_nexus_source_root=ml_nexus_source_root__from_env,
+        # ml_nexus_resource_root=ml_nexus_resource_root__from_env,
         # Storage Resolver
         storage_resolver=local_storage_resolver_from_env,
 
