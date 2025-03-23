@@ -18,7 +18,7 @@ from ml_nexus.project_structure import ProjectDef, ProjectDir
 from ml_nexus.schematics import MountRequest, CacheMountRequest, ContainerSchematic
 from ml_nexus.schematics_util.env_identification import SetupScriptWithDeps
 from ml_nexus.storage_resolver import IStorageResolver
-
+from typing import Sequence
 """
 We create a function that generates a schematics for universal project structure.
 
@@ -322,7 +322,8 @@ async def schematics_universal(
         /,
         target: ProjectDef,
         base_image: Optional[str] = None,
-        python_version: Optional[str] = None
+        python_version: Optional[str] = None,
+        additional_components: Sequence[EnvComponent] = (),
 ):
     base_image = base_image or ml_nexus_default_base_image
     python_version = python_version or ml_nexus_default_python_version
@@ -381,6 +382,7 @@ async def schematics_universal(
         await a_hf_cache_component(),
         setup_component,
         await a_project_sync_component(tgt=target),
+        *additional_components
     ]
     return await a_build_schematics_from_component(
         base_image=base_image,
