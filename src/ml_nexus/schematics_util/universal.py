@@ -226,6 +226,9 @@ async def a_uv_component(
         CacheMountRequest(
             'uv_cache', Path('/root/.cache/uv')
         ),
+        CacheMountRequest(
+            'uv_venv', Path('/root/.cache/uv_venv')
+        )
     ]
     return EnvComponent(
         installation_macro=[
