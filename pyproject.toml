@@ -15,7 +15,8 @@ dependencies = [
     "toml",
     "returns",
     "beartype",
-    "pinjected-openai @ git+https://github.com/proboscis/pinjected_openai.git",
+    #"pinjected-openai @ git+https://github.com/proboscis/pinjected.git#subdirectory=packages/openai_support",
+    "pinjected-openai",
     "pinjected>=0.2.246",
     "tomlkit>=0.13.2",
 ]
