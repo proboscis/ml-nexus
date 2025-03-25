@@ -16,4 +16,4 @@ jobs:
           target_repo_url:
             git@github.com:proboscis/ml-nexus.git
           ssh_private_key:
-            ${{ secrets.MIRROR_SSH_PRIVATE_KEY }}
+            ${{ secrets.PROBOSCIS_DEPLOY }}
