@@ -4,8 +4,9 @@ from typing import Literal, Callable
 
 from pinjected import *
 from pydantic import BaseModel
-from returns.result import ResultE, safe
+from returns.result import ResultE, safe, Success, Failure
 from beartype import beartype
+
 
 @injected
 @safe
@@ -41,10 +42,11 @@ class IdentifiedSchema(BaseModel):
     schema: RyeSchema | PoetrySchema | UVSchema | RequirementsTxtSchema | SetupPySchema | ReadmeSchema
     justification: str
 
+
 @dataclass
 class Test:
-    a:int
-    x:int = field(kw_only=True) # this marks x to be not a member of constructor.
+    a: int
+    x: int = field(kw_only=True)  # this marks x to be not a member of constructor.
 
 
 @injected
@@ -65,6 +67,7 @@ class SetupScriptWithDeps:
     cxt: ProjectContext
     script: str
     env_deps: list[str]
+
 
 f"""
 Using this dependency injection system, the problem is that 
@@ -91,42 +94,67 @@ Yeah someday I could do that...
 """
 
 
+# LLM-based implementation (commented out)
+# @injected
+# @beartype
+# async def a_identify_project_schema(new_ProjectContext, logger, a_cached_llm_for_ml_nexus, /, repo: Path)->IdentifiedSchema:
+#     cxt: ProjectContext = new_ProjectContext(repo=repo)
+#     """
+#     I could write auto detection code, but why not just ask the llm?
+#     """
+#     prompt = f"""
+# We are setting up a newly cloned github repository.
+# Can you determine the project schema from the following files?
+#
+# --- setup.py ---
+# {cxt.setup_py}
+# --- requirements.txt ---
+# {cxt.requirements_txt}
+# --- pyproject.toml ---
+# {cxt.pyproject}
+# --- README.md ---
+# {cxt.readme}
+# -------------------------------
+# only setup.py exists -> setup.py
+# only requirements.txt exists -> requirements.txt
+# only pyproject.toml exists -> poetry or rye or uv
+# if no poetry like field in pyproject.toml -> rye
+# only README.md exists -> README.md
+# both setup.py and requirements.txt exist -> setup.py
+# any uv related settings to uv in pyproject.toml -> uv
+# [tool.uv] exists in pyproject.toml -> uv
+# If the pyproject.toml explicitly states which tool to use in comment, please follow that.
+#     """
+#     logger.info(prompt)
+#     res: IdentifiedSchema = await a_cached_llm_for_ml_nexus(
+#         prompt,
+#         response_format=IdentifiedSchema
+#     )
+#     return res
+
 @injected
 @beartype
-async def a_identify_project_schema(new_ProjectContext, logger, a_cached_llm_for_ml_nexus, /, repo: Path)->IdentifiedSchema:
+async def a_identify_project_schema(new_ProjectContext, logger, /, repo: Path) -> IdentifiedSchema:
     cxt: ProjectContext = new_ProjectContext(repo=repo)
-    """
-    I could write auto detection code, but why not just ask the llm?
-    """
-    prompt = f"""
-We are setting up a newly cloned github repository.
-Can you determine the project schema from the following files?
-
---- setup.py ---
-{cxt.setup_py}
---- requirements.txt ---
-{cxt.requirements_txt}
---- pyproject.toml ---
-{cxt.pyproject}
---- README.md ---
-{cxt.readme}
--------------------------------
-only setup.py exists -> setup.py
-only requirements.txt exists -> requirements.txt
-only pyproject.toml exists -> poetry or rye or uv
-if no poetry like field in pyproject.toml -> rye
-only README.md exists -> README.md
-both setup.py and requirements.txt exist -> setup.py
-any uv related settings to uv in pyproject.toml -> uv
-[tool.uv] exists in pyproject.toml -> uv
-If the pyproject.toml explicitly states which tool to use in comment, please follow that.
-    """
-    logger.info(prompt)
-    res: IdentifiedSchema = await a_cached_llm_for_ml_nexus(
-        prompt,
-        response_format=IdentifiedSchema
-    )
-    return res
+    match (cxt.setup_py, cxt.requirements_txt, cxt.pyproject, cxt.readme):
+        case (Success(setup_py), Failure(), Failure(), _):
+            return IdentifiedSchema(schema=SetupPySchema(type='setup.py'), justification="only setup.py exists")
+        case (Failure(), Success(requirements_txt), Failure(), _):
+            return IdentifiedSchema(schema=RequirementsTxtSchema(type='requirements.txt'),
+                                    justification="only requirements.txt exists")
+        case (Failure(), Failure(), Success(pyproject), _):
+            if "poetry" in pyproject:
+                return IdentifiedSchema(schema=PoetrySchema(type='poetry'), justification="only pyproject.toml exists and 'poetry' is found")
+            elif "rye" in pyproject:
+                return IdentifiedSchema(schema=RyeSchema(type='rye'), justification="only pyproject.toml exists and 'rye' is found")
+            else:
+                return IdentifiedSchema(schema=UVSchema(type='uv'), justification="only pyproject.toml exists 'defaulting to uv'")
+        case (Failure(), Failure(), Failure(), Success(readme)):
+            return IdentifiedSchema(schema=ReadmeSchema(type='README.md'), justification="only README.md exists")
+        case (Failure(), Failure(), Failure(), Failure()):
+            raise NotImplementedError("No files found")
+        case _:
+            raise NotImplementedError(f"Failed to handle the case:{cxt}")
 
 
 class RequirementsTxt:
@@ -147,7 +175,7 @@ Please generate a requirements.txt from the following README.md:
 
 @injected
 async def a_schema_to_setup_script_with_deps(
-        a_generate_requirements_txt_from_readme,
+        # a_generate_requirements_txt_from_readme,
         new_ProjectContext,
         /,
         schema: IdentifiedSchema,
@@ -166,20 +194,20 @@ async def a_schema_to_setup_script_with_deps(
             deps = ['uv']
         case RequirementsTxtSchema():
             script = "pip install -r requirements.txt"
-            deps = ['pyvenv','requirements.txt']
+            deps = ['pyvenv', 'requirements.txt']
         case SetupPySchema():
             script = "pip install -e ."
-            deps = ['pyvenv','setup.py']
-        case ReadmeSchema():
-            # let's generate requirements.txt
-            src = cxt.readme.unwrap()
-            # is it IO[str]? or str? idk...
-            req_txt = await a_generate_requirements_txt_from_readme(src)
-            # let's use hear document
-            script = f"""pip install -r - <<EOF
-{req_txt.text}
-EOF"""
-            deps = ['pyvenv']
+            deps = ['pyvenv', 'setup.py']
+        #         case ReadmeSchema():
+        #             # let's generate requirements.txt
+        #             src = cxt.readme.unwrap()
+        #             # is it IO[str]? or str? idk...
+        #             req_txt = await a_generate_requirements_txt_from_readme(src)
+        #             # let's use hear document
+        #             script = f"""pip install -r - <<EOF
+        # {req_txt.text}
+        # EOF"""
+        #             deps = ['pyvenv']
         case _:
             raise NotImplementedError(f"schema:{schema.schema} is not implemented yet")
     return SetupScriptWithDeps(cxt=cxt, script=script, env_deps=deps)
