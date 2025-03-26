@@ -244,7 +244,7 @@ async def a_uv_component(
             f"cd {target.default_working_dir}",  # WORKDIR has no effect on K8S, so we set it here.
             "source $HOME/.cargo/env",
             "RANDOM_ID=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1)",
-            "export UV_PROJECT_ENVIRONMENT=/root/.cache/uv_env/$RANDOM_ID",
+            "export UV_PROJECT_ENVIRONMENT=/root/.cache/uv_venv/$RANDOM_ID",
             "uv sync",
             "source $UV_PROJECT_ENVIRONMENT/bin/activate",
         ],
