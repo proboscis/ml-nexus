@@ -212,7 +212,6 @@ def ml_nexus_github_credential_component(logger) -> EnvComponent:
         f"No github credential is being used. override `ml_nexus_github_credential_component:EnvComponent` to override it.")
     return EnvComponent()
 
-
 @injected
 async def a_uv_component(
         a_macro_install_uv,
@@ -220,8 +219,8 @@ async def a_uv_component(
         rust_cargo_component,
         ml_nexus_github_credential_component: EnvComponent,
         /,
-        target: ProjectDef
-
+        target: ProjectDef,
+        do_sync: bool = True
 ):
     caches = [
         CacheMountRequest(
@@ -245,8 +244,7 @@ async def a_uv_component(
             "source $HOME/.cargo/env",
             "RANDOM_ID=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1)",
             "export UV_PROJECT_ENVIRONMENT=/root/.cache/uv_venv/$RANDOM_ID",
-            "uv sync",
-            "source $UV_PROJECT_ENVIRONMENT/bin/activate",
+            *(["uv sync", "source $UV_PROJECT_ENVIRONMENT/bin/activate"] if do_sync else []),
         ],
         mounts=caches
     )
