@@ -7,6 +7,8 @@ from pydantic import BaseModel
 from returns.result import ResultE, safe, Success, Failure
 from beartype import beartype
 
+from ml_nexus.project_structure import ProjectDef
+
 
 @injected
 @safe
@@ -36,6 +38,11 @@ class SetupPySchema(BaseModel):
 
 class ReadmeSchema(BaseModel):
     type: Literal["README.md"]
+
+
+class SourceSchema(BaseModel):
+    # nothing to do, it's all up to the user
+    type: Literal["source"]
 
 
 class IdentifiedSchema(BaseModel):
@@ -144,11 +151,14 @@ async def a_identify_project_schema(new_ProjectContext, logger, /, repo: Path) -
                                     justification="only requirements.txt exists")
         case (Failure(), Failure(), Success(pyproject), _):
             if "poetry" in pyproject:
-                return IdentifiedSchema(schema=PoetrySchema(type='poetry'), justification="only pyproject.toml exists and 'poetry' is found")
+                return IdentifiedSchema(schema=PoetrySchema(type='poetry'),
+                                        justification="only pyproject.toml exists and 'poetry' is found")
             elif "rye" in pyproject:
-                return IdentifiedSchema(schema=RyeSchema(type='rye'), justification="only pyproject.toml exists and 'rye' is found")
+                return IdentifiedSchema(schema=RyeSchema(type='rye'),
+                                        justification="only pyproject.toml exists and 'rye' is found")
             else:
-                return IdentifiedSchema(schema=UVSchema(type='uv'), justification="only pyproject.toml exists 'defaulting to uv'")
+                return IdentifiedSchema(schema=UVSchema(type='uv'),
+                                        justification="only pyproject.toml exists 'defaulting to uv'")
         case (Failure(), Failure(), Failure(), Success(readme)):
             return IdentifiedSchema(schema=ReadmeSchema(type='README.md'), justification="only README.md exists")
         case (Failure(), Failure(), Failure(), Failure()):
@@ -175,7 +185,6 @@ Please generate a requirements.txt from the following README.md:
 
 @injected
 async def a_schema_to_setup_script_with_deps(
-        # a_generate_requirements_txt_from_readme,
         new_ProjectContext,
         /,
         schema: IdentifiedSchema,
@@ -208,6 +217,10 @@ async def a_schema_to_setup_script_with_deps(
         # {req_txt.text}
         # EOF"""
         #             deps = ['pyvenv']
+
+        case SourceSchema():
+            script = ""
+            deps = []
         case _:
             raise NotImplementedError(f"schema:{schema.schema} is not implemented yet")
     return SetupScriptWithDeps(cxt=cxt, script=script, env_deps=deps)
@@ -217,10 +230,24 @@ async def a_schema_to_setup_script_with_deps(
 async def a_prepare_setup_script_with_deps(
         a_identify_project_schema,
         a_schema_to_setup_script_with_deps,
+        storage_resolver,
         /,
-        repo: Path
+        target: ProjectDef,
 ):
-    schema = await a_identify_project_schema(repo)
+    repo = await storage_resolver.locate(target.dirs[0].id)
+    match target.dirs[0].kind:
+        case 'auto':
+            schema = await a_identify_project_schema(repo)
+        case 'source':
+            schema = SourceSchema(type='source')
+        case 'uv':
+            schema = UVSchema(type='uv')
+        case 'rye':
+            schema = RyeSchema(type='rye')
+        case 'poetry':
+            schema = PoetrySchema(type='poetry')
+        case _:
+            raise NotImplementedError(f"kind:{target.dirs[0].kind} is not implemented for schema identification")
     return await a_schema_to_setup_script_with_deps(schema, repo)
 
 

@@ -331,7 +331,7 @@ async def schematics_universal(
     base_image = base_image or ml_nexus_default_base_image
     python_version = python_version or ml_nexus_default_python_version
     local_root_dir = await storage_resolver.locate(target.dirs[0].id)
-    setup_script_with_deps: SetupScriptWithDeps = await a_prepare_setup_script_with_deps(local_root_dir)
+    setup_script_with_deps: SetupScriptWithDeps = await a_prepare_setup_script_with_deps(target)
     python_components = []
     for dep in setup_script_with_deps.env_deps:
         match dep:
