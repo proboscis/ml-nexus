@@ -244,6 +244,7 @@ async def a_uv_component(
             "source $HOME/.cargo/env",
             "RANDOM_ID=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1)",
             "export UV_PROJECT_ENVIRONMENT=/root/.cache/uv_venv/$RANDOM_ID",
+            "uv self update",
             *(["uv sync", "source $UV_PROJECT_ENVIRONMENT/bin/activate"] if do_sync else []),
         ],
         mounts=caches
