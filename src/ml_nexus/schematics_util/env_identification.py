@@ -46,7 +46,7 @@ class SourceSchema(BaseModel):
 
 
 class IdentifiedSchema(BaseModel):
-    schema: RyeSchema | PoetrySchema | UVSchema | RequirementsTxtSchema | SetupPySchema | ReadmeSchema
+    schema: RyeSchema | PoetrySchema | UVSchema | RequirementsTxtSchema | SetupPySchema | ReadmeSchema | SourceSchema
     justification: str
 
 
@@ -239,13 +239,13 @@ async def a_prepare_setup_script_with_deps(
         case 'auto':
             schema = await a_identify_project_schema(repo)
         case 'source':
-            schema = SourceSchema(type='source')
+            schema = IdentifiedSchema(schema=SourceSchema(type='source'), justification="directly set source")
         case 'uv':
-            schema = UVSchema(type='uv')
+            schema = IdentifiedSchema(schema=UVSchema(type='uv'), justification="directly set uv")
         case 'rye':
-            schema = RyeSchema(type='rye')
+            schema = IdentifiedSchema(schema=RyeSchema(type='rye'),justification="directly set rye")
         case 'poetry':
-            schema = PoetrySchema(type='poetry')
+            schema = IdentifiedSchema(schema=PoetrySchema(type='poetry'),justification="directly set poetry")
         case _:
             raise NotImplementedError(f"kind:{target.dirs[0].kind} is not implemented for schema identification")
     return await a_schema_to_setup_script_with_deps(schema, repo)
