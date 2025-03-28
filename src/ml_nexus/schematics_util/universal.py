@@ -220,7 +220,8 @@ async def a_uv_component(
         ml_nexus_github_credential_component: EnvComponent,
         /,
         target: ProjectDef,
-        do_sync: bool = True
+        do_sync: bool = True,
+        isolate_env: bool = True,
 ):
     caches = [
         CacheMountRequest(
@@ -230,6 +231,17 @@ async def a_uv_component(
             'uv_venv', Path('/root/.cache/uv_venv')
         )
     ]
+    scripts = []
+    if isolate_env:
+        scripts.append(
+            "RANDOM_ID=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1)"
+            "export UV_PROJECT_ENVIRONMENT=/root/.cache/uv_venv/$RANDOM_ID"
+        )
+    if do_sync:
+        scripts.append(
+            "uv sync",
+            "source $UV_PROJECT_ENVIRONMENT/bin/activate"
+        )
     return EnvComponent(
         installation_macro=[
             await a_macro_install_uv()
@@ -242,10 +254,8 @@ async def a_uv_component(
         init_script=[
             f"cd {target.default_working_dir}",  # WORKDIR has no effect on K8S, so we set it here.
             "source $HOME/.cargo/env",
-            "RANDOM_ID=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1)",
-            "export UV_PROJECT_ENVIRONMENT=/root/.cache/uv_venv/$RANDOM_ID",
             "uv self update",
-            *(["uv sync", "source $UV_PROJECT_ENVIRONMENT/bin/activate"] if do_sync else []),
+            *scripts
         ],
         mounts=caches
     )
