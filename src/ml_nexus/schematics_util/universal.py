@@ -237,6 +237,10 @@ async def a_uv_component(
             "RANDOM_ID=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1)"
             "export UV_PROJECT_ENVIRONMENT=/root/.cache/uv_venv/$RANDOM_ID"
         )
+    else:
+        scripts.append(
+            "export UV_PROJECT_ENVIRONMENT=/root/.cache/uv_venv/default"
+        )
     if do_sync:
         scripts.append(
             "uv sync",
