@@ -212,6 +212,7 @@ def ml_nexus_github_credential_component(logger) -> EnvComponent:
         f"No github credential is being used. override `ml_nexus_github_credential_component:EnvComponent` to override it.")
     return EnvComponent()
 
+
 @injected
 async def a_uv_component(
         a_macro_install_uv,
@@ -233,19 +234,19 @@ async def a_uv_component(
     ]
     scripts = []
     if isolate_env:
-        scripts.append(
-            "RANDOM_ID=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1)"
+        scripts += [
+            "RANDOM_ID=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1)",
             "export UV_PROJECT_ENVIRONMENT=/root/.cache/uv_venv/$RANDOM_ID"
-        )
+        ]
     else:
-        scripts.append(
+        scripts += [
             "export UV_PROJECT_ENVIRONMENT=/root/.cache/uv_venv/default"
-        )
+        ]
     if do_sync:
-        scripts.append(
+        scripts += [
             "uv sync",
             "source $UV_PROJECT_ENVIRONMENT/bin/activate"
-        )
+        ]
     return EnvComponent(
         installation_macro=[
             await a_macro_install_uv()
