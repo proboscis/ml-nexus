@@ -103,6 +103,19 @@ class DockerEnvFromSchematics(IScriptRunner):
                                              resource_id=resource_id,
                                              mount_point=mount_point,
                                              excludes=excludes):
+                        """
+                        Here, we assume all resource are locally available
+                        However, who runs this code is obviously not able to hold a large data locally.
+                        Like, Devin cannot locally hold 10~100GB of data.
+                        So, what the caller must ensure is that
+                        the resource id is available on the remote server.
+                        This doesnt mean we need the resource locally.
+                        So, if we can tell the resource is already ready on the env, we can safely skip.
+                        
+                        Anyways, we can make a new env class that is dedicated for DevinToMLP.
+                        Because the setting can be very specific to devin.
+                        """
+
                         local_path = await self._storage_resolver.locate(resource_id)
                         # 1. rsync to remote
                         host_dst = self.placement.resource_root / resource_id

@@ -96,6 +96,18 @@ class CommandException(Exception):
         return self.__class__, (self.message, self.code, self.stdout, self.stderr)
 
 
+class SystemCall(Protocol):
+    async def __call__(self, command: str, env: dict = None, working_dir=None) -> PsResult:
+        """
+        run a command in the system.
+        :param command:
+        :param env:
+        :param working_dir:
+        :return:
+        """
+        ...
+
+
 class ISystemCallEvent(Protocol):
     id: str
     command: str
@@ -337,7 +349,8 @@ async def system_lock():
 
 
 @injected
-async def a_system_sequential(system_lock, a_system_parallel, /, command: str, env: dict = None, working_dir=None):
+async def a_system_sequential(system_lock, a_system_parallel: SystemCall, /, command: str, env: dict = None,
+                              working_dir=None):
     async with system_lock:
         return await a_system_parallel(command, env, working_dir)
 
