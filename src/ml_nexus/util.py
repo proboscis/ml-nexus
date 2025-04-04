@@ -364,6 +364,53 @@ async def test_a_system_newlines(
         for i in range(10):
             tg.create_task(rsync.run())
 
+@injected
+async def a_system_secret(
+        ml_nexus_system_call_semaphore,
+        ml_nexus_default_subprocess_limit,
+        /,
+        command: str, env: dict = None, working_dir=None):
+    new_env = os.environ.copy()
+    if env is not None:
+        new_env.update(env)
+
+    async with ml_nexus_system_call_semaphore:
+        proc = await asyncio.create_subprocess_shell(
+            command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            stdin=asyncio.subprocess.PIPE,
+            # WARNING! STDIN must be set, or the pseudo terminal will get reused and mess up the terminal
+            env=new_env,
+            cwd=working_dir,
+            limit=ml_nexus_default_subprocess_limit,
+        )
+
+        # Stream and capture stdout and stderr
+
+        async def task_decode_stream(stream) -> str:
+            lines = ""
+            async for line in yield_from_stream_safe(stream):
+                lines += line.decode()[:-1] + "\n"
+            return lines
+        stdout, stderr = await asyncio.gather(
+            task_decode_stream(proc.stdout),
+            task_decode_stream(proc.stderr)
+        )
+
+        result: int = await proc.wait()  # Wait for the subprocess to exit
+        if result == 0:
+            pass
+        if result != 0:
+            raise CommandException(
+                f"command: <<{command}>> failed with code {result}."
+                f"\nstdout: {stdout}"
+                f"\nstderr: {stderr}",
+                code=result,
+                stdout=stdout,
+                stderr=stderr
+            )
+    return PsResult(stdout, stderr, exit_code=result)
 
 __meta_design__ = design(
     overrides=design(
