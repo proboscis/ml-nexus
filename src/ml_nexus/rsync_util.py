@@ -12,12 +12,16 @@ from pinjected import *
 class RsyncLocation:
     path: Path
     host: str = field(default="localhost")
+    user: str = field(default=None)
 
     def __post_init__(self):
         self.path = Path(self.path)
 
     def to_str(self):
-        return f"{self.host}:{self.path}" if self.host != "localhost" else str(self.path.expanduser())
+        if self.user:
+            return f"{self.user}@{self.host}:{self.path}"
+        else:
+            return f"{self.host}:{self.path}" if self.host != "localhost" else str(self.path.expanduser())
 
 
 @instance
