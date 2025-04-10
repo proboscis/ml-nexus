@@ -3,10 +3,8 @@ import inspect
 import os
 import shlex
 from contextlib import asynccontextmanager
-from hashlib import md5
-
-from pinjected.compatibility.task_group import TaskGroup
 from dataclasses import replace
+from hashlib import md5
 from pathlib import Path
 from pprint import pformat
 from tempfile import TemporaryDirectory
@@ -14,14 +12,16 @@ from typing import Union
 
 from loguru import logger
 from pinjected import *
+from pinjected.compatibility.task_group import TaskGroup
+from returns.future import future, Future
 
-from ml_nexus.assertions import is_async_context_manager
 from ml_nexus import load_env_design
+from ml_nexus.assertions import is_async_context_manager
 from ml_nexus.docker.asyncio_lock import KeyedLock
-from ml_nexus.docker.builder.builder_utils.docker_contexts import a_docker_push__local
 from ml_nexus.docker.builder.macros.macro_defs import Block, RCopy, BuildMacroContext, Macro
 from ml_nexus.path_util import path_hash
-from ml_nexus.rsync_util import RsyncArgs, RsyncLocation
+from ml_nexus.rsync_util import RsyncArgs
+from ml_nexus.util import PsResult
 
 
 @injected
@@ -325,11 +325,20 @@ async def a_calculate_build_context_hash(
     context_files.sort()
     return md5("\n".join(context_files).encode()).hexdigest()
 
+@instance
+@future
+async def f_docker_login(a_system,ml_nexus_docker_hub_token,ml_nexus_docker_hub_username)->PsResult:
+    """
+    docker login --username <username> --password-stdin
+    """
+    return await a_system(f"echo {ml_nexus_docker_hub_token} | docker login --username {ml_nexus_docker_hub_username} --password-stdin")
+
 
 @injected
 async def build_image_with_macro(
         a_build_docker,
         prepare_build_context_with_macro,
+        f_docker_login:Future,
         /,
         code: list[Union[str, Block, RCopy, RsyncArgs]],
         tag,
@@ -338,7 +347,7 @@ async def build_image_with_macro(
         build_id: str = None,
         options: str = ""
 ):
-
+    await f_docker_login
     assert isinstance(code, list), f"code must be a list of macro. but got {type(code)}"
     async with prepare_build_context_with_macro(
             code
