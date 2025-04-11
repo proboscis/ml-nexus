@@ -2,7 +2,7 @@
 
 # Default values for environment variables
 : "${PYENV_ROOT:="$HOME/.pyenv"}"
-: "${PYTHON_VERSION:="3.11.0"}"  # 元のバージョンを保持
+: "${PYTHON_VERSION:="3.11"}"
 : "${VENV_NAME:="myenv"}"
 : "${VENV_PATH:="$PWD/$VENV_NAME"}"
 : "${PYENV_GIT_URL:="https://github.com/pyenv/pyenv.git"}"
@@ -96,21 +96,30 @@ is_valid_virtualenv() {
     [ -f "$venv_dir/pyvenv.cfg" ]
 }
 
-# Create and activate virtualenv using venv module
+# Create virtualenv using Python's built-in venv module
 setup_virtualenv() {
-    # If directory exists but is not a valid virtualenv, back it up
+    # If directory exists but is not a valid virtualenv, clean it up
     if [ -d "$VENV_PATH" ] && ! is_valid_virtualenv "$VENV_PATH"; then
-        local backup_dir="${VENV_PATH}_backup_$(date +%Y%m%d_%H%M%S)"
         log_message "Directory exists but is not a valid virtualenv. Removing contents in $VENV_PATH"
-        # mv "$VENV_PATH" "$backup_dir"
-        rm -rf "$VENV_PATH/*"
+        rm -rf "$VENV_PATH"  # Complete removal to avoid file ownership issues
     fi
 
     if [ ! -d "$VENV_PATH" ] || ! is_valid_virtualenv "$VENV_PATH"; then
         log_message "Creating virtualenv at $VENV_PATH using venv module..."
         python -m venv "$VENV_PATH"
         if [ $? -ne 0 ] || ! is_valid_virtualenv "$VENV_PATH"; then
-            log_message "Failed to create virtualenv"
+            log_message "Failed to create virtualenv with venv module"
+
+            # Try to debug the issue
+            which python
+            python --version
+            log_message "Checking if venv module is available..."
+            if python -c "import venv; print('venv module is available')" 2>/dev/null; then
+                log_message "venv module is available"
+            else
+                log_message "venv module is not available"
+            fi
+
             return 1
         fi
     else
@@ -123,6 +132,7 @@ setup_virtualenv() {
 source "$VENV_PATH/bin/activate"
 EOF
     chmod +x activate_venv.sh
+    log_message "virtualenv setup complete. Activation script created at activate_venv.sh"
     return 0
 }
 
@@ -145,7 +155,7 @@ main() {
         exit 1
     fi
 
-    log_message "Setup complete! To activate the virtualenv, run: source activate_venv.sh"
+    log_message "Setup complete! To activate the virtualenv, run: source $VENV_PATH/bin/activate"
 }
 
 main
