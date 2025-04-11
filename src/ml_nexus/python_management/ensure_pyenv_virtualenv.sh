@@ -2,7 +2,7 @@
 
 # Default values for environment variables
 : "${PYENV_ROOT:="$HOME/.pyenv"}"
-: "${PYTHON_VERSION:="3.11.0"}"
+: "${PYTHON_VERSION:="3.11.0"}"  # 元のバージョンを保持
 : "${VENV_NAME:="myenv"}"
 : "${VENV_PATH:="$PWD/$VENV_NAME"}"
 : "${PYENV_GIT_URL:="https://github.com/pyenv/pyenv.git"}"
@@ -87,22 +87,6 @@ install_python() {
     pyenv global "$PYTHON_VERSION"
 }
 
-# Install virtualenv if not already installed
-install_virtualenv() {
-    if ! command_exists virtualenv; then
-        log_message "Installing virtualenv..."
-        pip install virtualenv
-        # Verify installation
-        if ! command_exists virtualenv; then
-            log_message "Failed to install virtualenv"
-            return 1
-        fi
-    else
-        log_message "virtualenv already installed"
-    fi
-    return 0
-}
-
 # Function to verify if a directory is a valid virtualenv
 is_valid_virtualenv() {
     local venv_dir="$1"
@@ -112,7 +96,7 @@ is_valid_virtualenv() {
     [ -f "$venv_dir/pyvenv.cfg" ]
 }
 
-# Create and activate virtualenv
+# Create and activate virtualenv using venv module
 setup_virtualenv() {
     # If directory exists but is not a valid virtualenv, back it up
     if [ -d "$VENV_PATH" ] && ! is_valid_virtualenv "$VENV_PATH"; then
@@ -123,8 +107,8 @@ setup_virtualenv() {
     fi
 
     if [ ! -d "$VENV_PATH" ] || ! is_valid_virtualenv "$VENV_PATH"; then
-        log_message "Creating virtualenv at $VENV_PATH..."
-        virtualenv "$VENV_PATH"
+        log_message "Creating virtualenv at $VENV_PATH using venv module..."
+        python -m venv "$VENV_PATH"
         if [ $? -ne 0 ] || ! is_valid_virtualenv "$VENV_PATH"; then
             log_message "Failed to create virtualenv"
             return 1
@@ -153,11 +137,6 @@ main() {
 
     if ! install_python; then
         log_message "Failed to install Python"
-        exit 1
-    fi
-
-    if ! install_virtualenv; then
-        log_message "Failed to install virtualenv"
         exit 1
     fi
 
