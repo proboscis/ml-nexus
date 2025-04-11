@@ -15,7 +15,6 @@ dependencies = [
     "returns",
     "beartype",
     "pinjected-openai @ git+https://github.com/proboscis/pinjected.git#subdirectory=packages/openai_support",
-    "pinjected",
     "tomlkit>=0.13.2",
 ]
 readme = "README.md"
