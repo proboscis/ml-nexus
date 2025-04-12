@@ -24,7 +24,7 @@ async def a_tag_to_repo(tag: str):
     return tag.split("/")[0]
 
 @injected
-async def a_setup_docker_credentials():
+async def a_setup_docker_credentials(tag):
     """
     Dummy function for setting up Docker credentials.
     This is a no-op and does not perform any actions.
