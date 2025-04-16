@@ -4,7 +4,6 @@ from typing import Any
 from pinjected import *
 from pinjected import instance
 
-from ml_nexus.schematics_util.universal import EnvComponent
 from ml_nexus.storage_resolver import IdPath
 
 from pinjected.test import test_tree
@@ -116,10 +115,11 @@ def ml_nexus_get_env_path(ml_nexus_logger, /, key: str, default: Path | str) -> 
 #     )
 
 @instance
-def ml_nexus_github_credential_component__pat(github_access_token) -> EnvComponent:
+def ml_nexus_github_credential_component__pat(github_access_token) -> "EnvComponent":
     """
     This is used by a_uv_component. but not yet by the rye component
     """
+    from ml_nexus.schematics_util.universal import EnvComponent
     script = f"""
 export GH_TOKEN={github_access_token}
 export GH_PAT={github_access_token}
