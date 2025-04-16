@@ -4,6 +4,7 @@ from typing import Any
 from pinjected import *
 from pinjected import instance
 
+from ml_nexus.schematics_util.universal import EnvComponent
 from ml_nexus.storage_resolver import IdPath
 
 from pinjected.test import test_tree
@@ -114,7 +115,20 @@ def ml_nexus_get_env_path(ml_nexus_logger, /, key: str, default: Path | str) -> 
 #         direct_root=ml_nexus_default_docker_host_upload_root
 #     )
 
-
+@instance
+def ml_nexus_github_credential_component__pat(github_access_token) -> EnvComponent:
+    """
+    This is used by a_uv_component. but not yet by the rye component
+    """
+    script = f"""
+export GH_TOKEN={github_access_token}
+export GH_PAT={github_access_token}
+git config --global credential.helper store
+echo "https://oauth2:$GH_PAT@github.com" > ~/.git-credentials
+chmod 600 ~/.git-credentials"""
+    return EnvComponent(
+        init_script=script.splitlines()
+    )
 @instance
 def __load_default_design():
     from ml_nexus.util import a_system_parallel, a_system_sequential
@@ -180,6 +194,7 @@ def __load_default_design():
         ml_nexus_default_base_image="nvidia/cuda:12.3.1-devel-ubuntu22.04",
         ml_nexus_default_python_version="3.12",
         macro_install_pyenv_virtualenv_installer=macro_install_pyenv_virtualenv_installer,
+        ml_nexus_github_credential_component=ml_nexus_github_credential_component__pat,
     )
 
     return default_design

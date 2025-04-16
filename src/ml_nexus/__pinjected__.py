@@ -38,6 +38,12 @@ __design_spec__ = DesignSpec.new(
     storage_resolver = SimpleBindSpec(
         validator=type_validator(IStorageResolver),
         documentation="""The default storage resolver."""
+    ),
+    github_access_token=SimpleBindSpec(
+        validator=type_validator(str),
+        documentation="""
+github access token to be used inside the job for fetching the code.
+        """
     )
 )
 
