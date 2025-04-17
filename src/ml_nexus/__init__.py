@@ -123,6 +123,7 @@ def ml_nexus_github_credential_component__pat(github_access_token) -> "EnvCompon
     script = f"""
 export GH_TOKEN={github_access_token}
 export GH_PAT={github_access_token}
+export UV_GITHUB_TOKEN="$GH_PAT"
 git config --global credential.helper store
 echo "https://oauth2:$GH_PAT@github.com" > ~/.git-credentials
 chmod 600 ~/.git-credentials"""
