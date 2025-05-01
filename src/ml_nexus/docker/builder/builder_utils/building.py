@@ -327,12 +327,16 @@ async def a_calculate_build_context_hash(
 
 
 @instance
-@future
-async def f_docker_login(a_system,ml_nexus_docker_hub_token,ml_nexus_docker_hub_username)->PsResult:
+def f_docker_login(a_system,ml_nexus_docker_hub_token,ml_nexus_docker_hub_username)->PsResult:
     """
     docker login --username <username> --password-stdin
     """
-    return await a_system(f"echo {ml_nexus_docker_hub_token} | docker login --username {ml_nexus_docker_hub_username} --password-stdin")
+    task = asyncio.create_task(
+        a_system(f"echo {ml_nexus_docker_hub_token} | docker login --username {ml_nexus_docker_hub_username} --password-stdin")
+    )
+
+    return Future(task)
+
 
 
 @injected
