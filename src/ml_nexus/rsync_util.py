@@ -1,6 +1,7 @@
 import asyncio
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from hashlib import md5
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Union
@@ -38,10 +39,18 @@ class RsyncArgs:
     src: RsyncLocation
     dst: RsyncLocation
     excludes: list[str] = None
+    includes: list[str] = None
     options: list[str] = None
     hardlink: bool = False
 
     __match_args__ = ('src', 'dst', 'excludes', 'options', 'hardlink')
+
+    def hash(self):
+        src_hash = self.src.path
+        dst_hash = self.dst.path
+        excludes_hash = "".join(self.excludes)
+        options_hash = "".join(self.options)
+        return md5(f"{src_hash}{dst_hash}{excludes_hash}{options_hash}".encode()).hexdigest()
 
     def __post_init__(self):
         self.src = self._ensure_loc(self.src)
@@ -52,10 +61,12 @@ class RsyncArgs:
             self.excludes = []
         if self.options is None:
             self.options = []
+        if self.includes is None:
+            self.includes = []
         self.excludes = list(set(self.excludes))
         assert isinstance(self.excludes, list), f"excludes is not list, but {type(self.excludes)}"
         assert isinstance(self.options, list), f"options is not list, but {type(self.options)}"
-
+        assert isinstance(self.includes, list), f"includes is not list, but {type(self.includes)}"
     def _ensure_loc(self, tgt: Union[RsyncLocation, Path, str]):
         match tgt:
             case RsyncLocation():
@@ -82,9 +93,11 @@ class RsyncArgs:
             cmd += f"{self.src.to_str()}/ {self.dst.to_str()}/"
             if options:
                 cmd += " " + " ".join(options)
-            with to_filter_file(excludes) as filter_file:
+            with to_filter_file(excludes,args.includes) as filter_file:
                 cmd += f" --filter='merge {filter_file}'"
                 # logger.debug(f"rsync with cmd: {cmd}")#, filterfile:\n{filter_file.read_text()}")
+                from loguru import logger
+                logger.warning(f"running rsync:{cmd}")
                 await self._a_system(cmd)
         # result_ls = await self._a_system(f"ls -la {self.dst.to_str()}")
         # logger.info(f"rsync result dst ls:{result_ls}")
@@ -102,11 +115,15 @@ class NewRsyncArgs:
         pass
 
 @contextmanager
-def to_filter_file(excludes):
+def to_filter_file(excludes,includes=None):
+    if includes is None:
+        includes = []
     with TemporaryDirectory() as tmpdir:
         tmpdir = Path(tmpdir)
         filter_file = tmpdir / "filter.txt"
         filter = ""
+        for inc in includes:
+            filter += f"+ {inc}\n"
         for ex in excludes:
             filter += f"- {ex}\n"
         filter_file.write_text(filter)

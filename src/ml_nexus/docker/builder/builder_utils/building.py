@@ -254,13 +254,15 @@ async def prepare_build_context_with_macro(
                         case RCopy(src, dst):
                             tg.create_task(a_system(f"cp -r {src} {tmpdir / path_hash(dst)}"))
                             return f"COPY {path_hash(dst)} {dst}"
-                        case RsyncArgs(src, dst, excludes, options) as args:
-                            rsync_dst = tmpdir / path_hash(dst.path)
+                        case RsyncArgs() as args:
+                            dst = args.dst
+                            dst_hash = args.hash()[:16]
+                            rsync_dst = tmpdir / dst_hash
                             assert not rsync_dst.exists(), "the destination of rsync already exists."
                             new_args: RsyncArgs = replace(args, dst=rsync_dst, hardlink=True)
                             new_args.__post_init__()  # validation
                             tg.create_task(new_args.run())
-                            return f"COPY {path_hash(dst.path)} {dst.path}"
+                            return f"COPY {dst_hash} {dst.path}"
                         case tgt if is_async_context_manager(tgt):
                             assert tgt not in macros_in_context, f"recursive async context manager {tgt}"
                             logger.info(f"entering async context manager {tgt}")
