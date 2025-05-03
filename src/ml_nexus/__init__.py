@@ -157,6 +157,7 @@ def __load_default_design():
     from ml_nexus.docker.builder.docker_env_with_schematics import DockerEnvFromSchematics
     from pinjected_openai.vision_llm import a_cached_vision_llm__gpt4o
     from ml_nexus.docker.builder.builder_utils.schematics_for_setup_py import macro_install_pyenv_virtualenv_installer
+    from ml_nexus.docker.builder.builder_utils.building import a_build_docker
     default_design = design(
         env_result_download_path=Path("results").expanduser(),
         # a_system=a_system_sequential,
@@ -167,7 +168,7 @@ def __load_default_design():
         patch_uv_dir=patch_uv_dir,
         gather_rsync_macros_project_def=gather_rsync_macros_project_def,
         macro_install_base64_runner=macro_install_base64_runner,
-        a_build_docker=a_build_docker_no_buildkit,
+        a_build_docker=a_build_docker,
         # Constructors
         new_DockerHostEnvironment=injected(DockerHostEnvironment),
         new_DockerHostMounter=injected(DockerHostMounter),

@@ -181,6 +181,26 @@ async def a_build_docker_no_buildkit(
         await a_system(f"docker push {tag}")
     return tag
 
+@injected
+async def a_build_docker(
+        a_system,
+        ml_nexus_debug_docker_build,
+        /,
+        tag,
+        context_dir,
+        options: str,
+        push: bool = False,
+        build_id=None
+):
+    await a_system(f"docker build {options} -t {tag} {context_dir}")
+    if ml_nexus_debug_docker_build:
+        await a_system(f"docker history {tag}")
+    if push:
+        await a_system(f"docker push {tag}")
+    return tag
+
+
+
 
 
 
