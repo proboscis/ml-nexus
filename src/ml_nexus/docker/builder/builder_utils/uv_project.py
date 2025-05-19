@@ -11,12 +11,7 @@ from ml_nexus.project_structure import ProjectDef, ProjectDir
 from loguru import logger
 macro_essentials = [
     "ARG DEBIAN_FRONTEND=noninteractive",
-    "RUN apt-get update && apt-get install -y python3-pip python3-dev build-essential libssl-dev curl",
-    # "RUN apt-get install -y libgl1-mesa-glx",
-    # "RUN apt-get install -y libglib2.0-0",
-    # "RUN apt-get install -y libglib2.0-dev libgtk2.0-dev libsm6 libxext6 libxrender1 libfontconfig1 libice6",
-    "RUN apt-get install -y git",
-    "RUN apt-get install -y clang"
+    "RUN apt-get update && apt-get install -y python3-pip python3-dev build-essential libssl-dev curl git clang",
 ]
 
 pyenv_cache_paths = [

@@ -37,13 +37,7 @@ async def schematics_with_uv(
         base_image=base_image,
         macros=[
             "ENV DEBIAN_FRONTEND=noninteractive",
-            "RUN apt-get update && apt-get install -y python3-pip python3-dev build-essential libssl-dev curl",
-            # "RUN apt-get install -y libgl1-mesa-glx",
-            # "RUN apt-get install -y libglib2.0-0",
-            # "RUN apt-get install -y libglib2.0-dev libgtk2.0-dev libsm6 libxext6 libxrender1 libfontconfig1 libice6",
-            "RUN apt-get install -y git",
-            "RUN apt-get install -y clang",
-            "RUN apt-get install -y rsync",
+            "RUN apt-get update && apt-get install -y python3-pip python3-dev build-essential libssl-dev curl git clang rsync",
             await a_macro_install_uv(),
             f'ENV HF_HOME={hf_cache_mount}',
             f'WORKDIR {target.default_working_dir}'
