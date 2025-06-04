@@ -51,7 +51,7 @@ async def a_macro_install_pyenv(
         "ENV PYENV_ROOT=$HOME/.pyenv",
         "ENV PATH=$PYENV_ROOT/bin:$PATH",
         "RUN pyenv -h",
-        "RUN apt install tree -y",
+        "RUN apt update && apt install tree -y",
         # RUN_with_cache(pyenv_cache_paths, "echo 'eval \"$(pyenv init --path)\"' >> ~/.bashrc"),
         # RUN_with_cache(pyenv_cache_paths, "echo 'eval \"$(pyenv virtualenv-init -)\"' >> ~/.bashrc"),
         """
@@ -130,7 +130,7 @@ async def a_macro_setup_python_for_project_via_uv(
     assert venv_dir.name == ".venv", f"venv_dir must end with .venv, but got {venv_dir}"
     py_version_tuple = tuple(map(int, python_version.split(".")))
     macros = [
-        f"RUN apt install tree -y",
+        f"RUN apt update && apt install tree -y",
         f"WORKDIR {venv_dir.parent}",
         f"RUN pyenv global {python_version}",
         f"RUN uv venv",
