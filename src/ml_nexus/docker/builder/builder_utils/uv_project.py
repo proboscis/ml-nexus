@@ -130,11 +130,7 @@ async def a_macro_setup_python_for_project_via_uv(
     assert venv_dir.name == ".venv", f"venv_dir must end with .venv, but got {venv_dir}"
     py_version_tuple = tuple(map(int, python_version.split(".")))
     macros = [
-<<<<<<< HEAD
-        f"RUN apt update && apt install tree -y",
-=======
         f"RUN apt-get update && apt-get install tree -y",
->>>>>>> 959ac977cfd2ee20dfe40a8dccac2d7abdac9f30
         f"WORKDIR {venv_dir.parent}",
         f"RUN pyenv global {python_version}",
         f"RUN uv venv",
