@@ -19,7 +19,11 @@
       "Bash(git commit:*)",
       "Bash(uvx ruff check:*)",
       "Bash(docker context:*)",
-      "Bash(docker:*)"
+      "Bash(docker:*)",
+      "Bash(git branch:*)",
+      "Bash(touch:*)",
+      "Bash(cat:*)",
+      "Bash(ln:*)"
     ],
     "deny": []
   }

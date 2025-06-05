@@ -42,7 +42,11 @@ async def a_test_docker_context_injection(
     logger.info("✅ Docker context injection verified")
     return ml_nexus_docker_build_context
 
-test_docker_context_injection = to_pytest(a_test_docker_context_injection())
+test_docker_context_injection_iproxy: IProxy = a_test_docker_context_injection(
+    injected("ml_nexus_docker_build_context"),
+    injected("logger")
+)
+test_docker_context_injection = to_pytest(test_docker_context_injection_iproxy)
 
 
 # ===== Test Docker build with context =====
@@ -83,7 +87,13 @@ async def a_test_docker_build_with_context(
         logger.error(f"Build failed: {e}")
         raise
 
-test_docker_build_with_context = to_pytest(a_test_docker_build_with_context())
+test_docker_build_with_context_iproxy: IProxy = a_test_docker_build_with_context(
+    injected("new_DockerBuilder"),
+    injected("a_build_docker"),
+    injected("ml_nexus_docker_build_context"),
+    injected("logger")
+)
+test_docker_build_with_context = to_pytest(test_docker_build_with_context_iproxy)
 
 
 # ===== Test multiple contexts override =====
@@ -110,10 +120,11 @@ async def a_test_context_override(logger):
     assert original == "zeus", f"Expected 'zeus', got '{original}'"
     logger.info("✅ Original context preserved")
 
-test_context_override = to_pytest(a_test_context_override())
+test_context_override_iproxy: IProxy = a_test_context_override(injected("logger"))
+test_context_override = to_pytest(test_context_override_iproxy)
 
 
 # ===== IProxy entry points =====
-verify_zeus_context: IProxy = a_test_docker_context_injection()
-build_with_zeus: IProxy = a_test_docker_build_with_context()
-test_override: IProxy = a_test_context_override()
+verify_zeus_context: IProxy = test_docker_context_injection_iproxy
+build_with_zeus: IProxy = test_docker_build_with_context_iproxy
+test_override: IProxy = test_context_override_iproxy
