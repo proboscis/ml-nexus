@@ -60,17 +60,17 @@ async def test_uv_docker_python(schematics_universal, new_DockerEnvFromSchematic
     
     # Test 1: Run Python version command
     result = await docker_env.run_script("python --version")
-    logger.info(f"Python version output: {result}")
-    assert "Python" in result, f"Expected 'Python' in output, got: {result}"
+    logger.info(f"Python version output: {result.stdout}")
+    assert "Python" in result.stdout, f"Expected 'Python' in output, got: {result.stdout}"
     
     # Test 2: Run Python code
     result = await docker_env.run_script("python -c 'print(\"Hello from UV environment!\")'")
-    logger.info(f"Python hello output: {result}")
-    assert "Hello from UV environment!" in result
+    logger.info(f"Python hello output: {result.stdout}")
+    assert "Hello from UV environment!" in result.stdout
     
     # Test 3: Check if UV installed packages
     result = await docker_env.run_script("python -c 'import sys; print(sys.executable)'")
-    logger.info(f"Python executable: {result}")
+    logger.info(f"Python executable: {result.stdout}")
     
     logger.info("✅ UV Docker Python test passed")
 
@@ -97,13 +97,13 @@ async def test_rye_docker_python(schematics_universal, new_DockerEnvFromSchemati
     
     # Test Python availability
     result = await docker_env.run_script("python --version")
-    logger.info(f"Python version output: {result}")
-    assert "Python" in result, f"Expected 'Python' in output, got: {result}"
+    logger.info(f"Python version output: {result.stdout}")
+    assert "Python" in result.stdout, f"Expected 'Python' in output, got: {result.stdout}"
     
     # Test Python execution
     result = await docker_env.run_script("python -c 'import platform; print(f\"Rye env: Python {platform.python_version()}\")'")
-    logger.info(f"Platform info: {result}")
-    assert "Rye env: Python" in result
+    logger.info(f"Platform info: {result.stdout}")
+    assert "Rye env: Python" in result.stdout
     
     logger.info("✅ Rye Docker Python test passed")
 
@@ -130,13 +130,13 @@ async def test_requirements_docker_python(schematics_universal, new_DockerEnvFro
     
     # Test Python availability
     result = await docker_env.run_script("python --version")
-    logger.info(f"Python version output: {result}")
-    assert "Python" in result, f"Expected 'Python' in output, got: {result}"
+    logger.info(f"Python version output: {result.stdout}")
+    assert "Python" in result.stdout, f"Expected 'Python' in output, got: {result.stdout}"
     
     # Test that packages from requirements.txt are installed
     result = await docker_env.run_script("python -c 'import pandas; import numpy; print(f\"pandas {pandas.__version__}, numpy {numpy.__version__}\")'")
-    logger.info(f"Package versions: {result}")
-    assert "pandas" in result and "numpy" in result, f"Expected pandas and numpy versions, got: {result}"
+    logger.info(f"Package versions: {result.stdout}")
+    assert "pandas" in result.stdout and "numpy" in result.stdout, f"Expected pandas and numpy versions, got: {result.stdout}"
     
     logger.info("✅ Requirements.txt Docker Python test passed")
 
@@ -163,13 +163,13 @@ async def test_setuppy_docker_python(schematics_universal, new_DockerEnvFromSche
     
     # Test Python availability
     result = await docker_env.run_script("python --version")
-    logger.info(f"Python version output: {result}")
-    assert "Python" in result, f"Expected 'Python' in output, got: {result}"
+    logger.info(f"Python version output: {result.stdout}")
+    assert "Python" in result.stdout, f"Expected 'Python' in output, got: {result.stdout}"
     
     # Test that the package is installed
     result = await docker_env.run_script("python -c 'import test_setuppy; print(f\"test_setuppy imported successfully\")'")
-    logger.info(f"Package import: {result}")
-    assert "test_setuppy imported successfully" in result
+    logger.info(f"Package import: {result.stdout}")
+    assert "test_setuppy imported successfully" in result.stdout
     
     logger.info("✅ Setup.py Docker Python test passed")
 
@@ -198,7 +198,7 @@ async def test_source_docker_no_python(schematics_universal, new_DockerEnvFromSc
     try:
         result = await docker_env.run_script("python --version")
         # If we get here, Python exists when it shouldn't
-        assert False, f"Python should not be available in source project, but got: {result}"
+        assert False, f"Python should not be available in source project, but got: {result.stdout}"
     except Exception as e:
         # Expected - Python should not be available
         logger.info(f"Expected error (Python not found): {str(e)}")
@@ -206,8 +206,8 @@ async def test_source_docker_no_python(schematics_universal, new_DockerEnvFromSc
     
     # But basic shell commands should work
     result = await docker_env.run_script("echo 'Hello from source environment'")
-    logger.info(f"Echo output: {result}")
-    assert "Hello from source environment" in result
+    logger.info(f"Echo output: {result.stdout}")
+    assert "Hello from source environment" in result.stdout
     
     logger.info("✅ Source Docker (no Python) test passed")
 

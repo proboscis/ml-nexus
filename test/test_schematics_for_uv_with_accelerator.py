@@ -114,7 +114,7 @@ async def test_run_script_zeus(logger):
     
     # Run script
     result = await docker_env.run_script('echo "Hello, World!"')
-    assert "Hello, World!" in result
+    assert "Hello, World!" in result.stdout
     logger.info("✅ Script execution test passed")
 
 
@@ -141,7 +141,7 @@ async def test_python_cuda_deps_zeus(logger):
     result = await docker_env.run_script('python -c "import torch; import basicsr; print(torch.__version__)"')
     
     # Verify torch is imported successfully
-    assert "torch" not in result.lower() or "error" not in result.lower()
+    assert "torch" not in result.stdout.lower() or "error" not in result.stdout.lower()
     logger.info(f"PyTorch version detected: {result.strip()}")
     logger.info("✅ CUDA dependencies test passed")
 

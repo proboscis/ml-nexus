@@ -72,11 +72,11 @@ async def test_docker_env_basic_schematics(schematics_universal, new_DockerEnvFr
     
     # Test basic script execution
     result = await docker_env.run_script("echo 'Hello from Docker'")
-    assert "Hello from Docker" in result
+    assert "Hello from Docker" in result.stdout
     
     # Test Python availability
     result = await docker_env.run_script("python --version")
-    assert "Python" in result
+    assert "Python" in result.stdout
     
     logger.info("✅ Basic schematics test passed")
 
@@ -119,7 +119,7 @@ async def test_docker_env_with_mounts(schematics_universal, new_DockerEnvFromSch
     
     # Test mount availability
     result = await docker_env.run_script("ls -la /data")
-    assert "config.yaml" in result or "data.json" in result
+    assert "config.yaml" in result.stdout or "data.json" in result.stdout
     
     logger.info("✅ Mount test passed")
 
@@ -154,7 +154,7 @@ async def test_docker_env_multiple_project_types(schematics_universal, new_Docke
         
         try:
             result = await docker_env.run_script(test_cmd)
-            assert "works" in result, f"{name} test failed: {result}"
+            assert "works" in result.stdout, f"{name} test failed: {result.stdout}"
             logger.info(f"✅ {name} test passed")
         except Exception as e:
             logger.error(f"❌ {name} test failed: {e}")
@@ -194,7 +194,7 @@ async def test_docker_env_script_context(schematics_universal, new_DockerEnvFrom
         
         # Verify file exists in container
         result = await docker_env.run_script(f"cat {remote_path}/test.txt")
-        assert "test content" in result
+        assert "test content" in result.stdout
         
         # Test download
         download_path = context.local_download_path / "downloaded.txt"
@@ -241,7 +241,7 @@ async def test_docker_env_builder_integration(schematics_universal, new_DockerEn
     
     # Test that the builder script is executed
     result = await docker_env.run_script("echo $TEST_VAR")
-    assert "from_builder" in result
+    assert "from_builder" in result.stdout
     
     logger.info("✅ Builder integration test passed")
 
@@ -266,7 +266,7 @@ async def test_docker_env_without_init(schematics_universal, new_DockerEnvFromSc
     
     # Test running script without initialization
     result = await docker_env.run_script_without_init("echo 'No init needed'")
-    assert "No init needed" in result
+    assert "No init needed" in result.stdout
     
     logger.info("✅ Without init test passed")
 
