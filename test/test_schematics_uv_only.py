@@ -1,7 +1,12 @@
-"""Test UV kind for schematics_universal"""
+"""Test UV kind for schematics_universal
+
+This test specifically verifies that UV projects are correctly
+handled by the schematics_universal function.
+"""
 
 from pathlib import Path
-from pinjected import *
+from pinjected import design, IProxy, injected
+from pinjected.test import injected_pytest
 from ml_nexus import load_env_design
 from ml_nexus.project_structure import ProjectDef, ProjectDir
 from ml_nexus.schematics_util.universal import schematics_universal
@@ -15,6 +20,17 @@ test_storage_resolver = StaticStorageResolver({
     "test_uv": TEST_PROJECT_ROOT / "test_uv",
 })
 
+# Test design configuration
+test_design = design(
+    storage_resolver=test_storage_resolver,
+    logger=logger
+)
+
+# Module design configuration
+__meta_design__ = design(
+    overrides=load_env_design + test_design
+)
+
 # Test UV project
 test_uv_project = ProjectDef(dirs=[ProjectDir('test_uv', kind='uv')])
 test_uv_schematic: IProxy = schematics_universal(
@@ -22,7 +38,103 @@ test_uv_schematic: IProxy = schematics_universal(
     base_image='python:3.11-slim'
 )
 
-# Analyze the UV schematic
+# ===== Test UV schematic generation =====
+@injected_pytest(test_design)
+async def test_analyze_uv_schematic(schematics_universal, logger):
+    """Test and analyze UV schematic generation"""
+    logger.info("Testing UV schematic generation")
+    
+    # Create UV project
+    project = ProjectDef(dirs=[ProjectDir('test_uv', kind='uv')])
+    schematic = await schematics_universal(
+        target=project,
+        base_image='python:3.11-slim'
+    )
+    
+    builder = schematic.builder
+    
+    logger.info(f"\n{'='*60}")
+    logger.info("Analysis for UV kind")
+    logger.info(f"{'='*60}")
+    
+    # Verify base image
+    assert builder.base_image == 'python:3.11-slim'
+    logger.info(f"Base image: {builder.base_image}")
+    
+    # Verify base stage name exists
+    assert hasattr(builder, 'base_stage_name')
+    logger.info(f"Base stage name: {builder.base_stage_name}")
+    
+    # Verify macros
+    assert len(builder.macros) > 0, "UV project should have macros"
+    logger.info(f"Macros count: {len(builder.macros)}")
+    
+    # Analyze macros structure
+    macro_types = {}
+    for macro in builder.macros:
+        macro_type = type(macro).__name__
+        macro_types[macro_type] = macro_types.get(macro_type, 0) + 1
+    
+    logger.info("Macro types:")
+    for mtype, count in macro_types.items():
+        logger.info(f"  {mtype}: {count}")
+    
+    # Verify scripts
+    assert len(builder.scripts) > 0, "UV project should have scripts"
+    logger.info(f"Scripts count: {len(builder.scripts)}")
+    
+    # Check for UV-specific commands
+    scripts_str = ' '.join(builder.scripts)
+    assert 'uv' in scripts_str, "UV project scripts should contain 'uv' command"
+    assert 'uv sync' in scripts_str, "UV project should run 'uv sync'"
+    
+    # Show first few scripts
+    logger.info("First 3 scripts:")
+    for i, script in enumerate(builder.scripts[:3]):
+        logger.info(f"  Script {i}: {script}")
+    
+    # Verify mount requests
+    logger.info(f"Mount requests: {len(schematic.mount_requests)}")
+    for i, mount in enumerate(schematic.mount_requests):
+        logger.info(f"  Mount {i}: {type(mount).__name__}")
+    
+    logger.info("✅ UV schematic analysis complete")
+
+
+# ===== Test UV project specifics =====
+@injected_pytest(test_design)
+async def test_uv_project_specifics(schematics_universal, logger):
+    """Test UV-specific features in the schematic"""
+    logger.info("Testing UV-specific features")
+    
+    project = ProjectDef(dirs=[ProjectDir('test_uv', kind='uv')])
+    schematic = await schematics_universal(
+        target=project,
+        base_image='python:3.11-slim',
+        python_version='3.11'
+    )
+    
+    builder = schematic.builder
+    scripts_str = ' '.join(builder.scripts)
+    
+    # Verify UV installation
+    assert any('uv' in script for script in builder.scripts), \
+        "UV should be referenced in scripts"
+    
+    # Verify Python version handling
+    assert '3.11' in str(builder.macros) or '3.11' in scripts_str, \
+        "Python version should be respected"
+    
+    # Verify project structure
+    assert any('pyproject.toml' in str(macro) for macro in builder.macros) or \
+           'pyproject.toml' in scripts_str, \
+        "UV projects should handle pyproject.toml"
+    
+    logger.info("✅ UV-specific features verified")
+
+
+# Keep IProxy for backward compatibility
+# Analyze function for running outside pytest
 @injected
 async def a_analyze_uv(schematic):
     """Analyze UV schematic"""
@@ -33,40 +145,15 @@ async def a_analyze_uv(schematic):
     logger.info(f"{'='*60}")
     
     logger.info(f"Base image: {builder.base_image}")
-    logger.info(f"Base stage name: {builder.base_stage_name}")
-    logger.info(f"\nMacros count: {len(builder.macros)}")
+    logger.info(f"Macros count: {len(builder.macros)}")
+    logger.info(f"Scripts count: {len(builder.scripts)}")
+    logger.info(f"Mount requests: {len(schematic.mount_requests)}")
     
-    # Analyze macros
-    logger.info("\nMacros breakdown:")
-    for i, macro in enumerate(builder.macros):
-        if isinstance(macro, str):
-            logger.info(f"  Macro {i}: {macro[:80]}...")
-        elif isinstance(macro, list):
-            logger.info(f"  Macro {i}: List with {len(macro)} items")
-            if macro:  # If list is not empty
-                if isinstance(macro[0], str):
-                    logger.info(f"    First item: {macro[0][:60]}...")
-        else:
-            logger.info(f"  Macro {i}: {type(macro).__name__}")
-    
-    # Scripts
-    logger.info(f"\nScripts count: {len(builder.scripts)}")
-    logger.info("\nScripts:")
-    for i, script in enumerate(builder.scripts):
-        logger.info(f"  Script {i}: {script}")
-    
-    # Mount requests
-    logger.info(f"\nMount requests: {len(schematic.mount_requests)}")
-    for i, mount in enumerate(schematic.mount_requests):
-        logger.info(f"  Mount {i}: {mount}")
-    
-    return "UV analysis complete"
+    return {
+        "base_image": builder.base_image,
+        "macros_count": len(builder.macros),
+        "scripts_count": len(builder.scripts),
+        "mounts_count": len(schematic.mount_requests)
+    }
 
 test_analyze: IProxy = a_analyze_uv(test_uv_schematic)
-
-# Design configuration with storage resolver override
-__meta_design__ = design(
-    overrides=load_env_design + design(
-        storage_resolver=test_storage_resolver
-    )
-)

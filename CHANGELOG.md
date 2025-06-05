@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Refactored test suite to use `@injected_pytest` decorator for Pinjected tests
+  - Migrated 9 test files from custom `to_pytest` pattern to recommended `@injected_pytest`
+  - Removed return statements from test functions, replaced with proper assertions
+  - Fixed wildcard imports to use explicit imports
+  - Added proper test design configurations for each test module
+  - Maintained backward compatibility with IProxy definitions for direct execution
+- Improved test maintainability and compliance with Pinjected framework best practices
+
+### Added
+- `test/PINJECTED_USAGE_ANALYSIS.md` - Comprehensive analysis of Pinjected usage issues across test files
+- `test/PINJECTED_MIGRATION_PLAN.md` - Systematic migration plan for converting tests to best practices
+
+## [0.0.8]
+
 ### Added
 - Docker context support for building images on different Docker endpoints (e.g., zeus, colima)
   - New `ml_nexus_docker_build_context` configuration parameter

@@ -3,7 +3,6 @@
 from pinjected import IProxy, design, injected
 from pinjected.test import injected_pytest
 from ml_nexus import load_env_design
-from loguru import logger
 
 # Test design with zeus context
 zeus_test_design = design(
@@ -21,7 +20,6 @@ async def test_docker_context_is_zeus(ml_nexus_docker_build_context, logger):
     """Test that Docker context is set to zeus"""
     logger.info(f"Docker context: {ml_nexus_docker_build_context}")
     assert ml_nexus_docker_build_context == "zeus"
-    return f"Context verified: {ml_nexus_docker_build_context}"
 
 
 # Entry point for pinjected run

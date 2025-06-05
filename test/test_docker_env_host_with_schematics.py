@@ -5,7 +5,8 @@ interface, testing various project types and configurations.
 """
 
 from pathlib import Path
-from pinjected import IProxy, design, injected
+from pinjected import design
+from pinjected.test import injected_pytest
 from ml_nexus import load_env_design
 from ml_nexus.docker.builder.docker_env_with_schematics import DockerHostPlacement
 from ml_nexus.project_structure import ProjectDef, ProjectDir
@@ -13,9 +14,6 @@ from ml_nexus.schematics import CacheMountRequest, ResolveMountRequest, Containe
 from ml_nexus.storage_resolver import StaticStorageResolver
 from loguru import logger
 import tempfile
-
-# Import the conversion utility
-from test.iproxy_test_utils import to_pytest
 
 # Setup test project paths
 TEST_PROJECT_ROOT = Path(__file__).parent / "dummy_projects"
@@ -30,25 +28,28 @@ test_storage_resolver = StaticStorageResolver({
     "test_resource": TEST_PROJECT_ROOT / "test_resource",
 })
 
+# Test design configuration
+test_design = design(
+    storage_resolver=test_storage_resolver,
+    logger=logger,
+    ml_nexus_default_docker_host_placement=DockerHostPlacement(
+        cache_root=Path("/tmp/ml-nexus-test/cache"),
+        resource_root=Path("/tmp/ml-nexus-test/resources"),
+        source_root=Path("/tmp/ml-nexus-test/source"),
+        direct_root=Path("/tmp/ml-nexus-test/direct"),
+    ),
+    docker_host="localhost",  # Default test host
+)
+
 # Module design configuration
 __meta_design__ = design(
-    overrides=load_env_design + design(
-        storage_resolver=test_storage_resolver,
-        logger=logger,
-        ml_nexus_default_docker_host_placement=DockerHostPlacement(
-            cache_root=Path("/tmp/ml-nexus-test/cache"),
-            resource_root=Path("/tmp/ml-nexus-test/resources"),
-            source_root=Path("/tmp/ml-nexus-test/source"),
-            direct_root=Path("/tmp/ml-nexus-test/direct"),
-        ),
-        docker_host="localhost",  # Default test host
-    )
+    overrides=load_env_design + test_design
 )
 
 
 # ===== Test 1: Basic schematics functionality =====
-@injected
-async def a_test_docker_env_basic_schematics(schematics_universal, new_DockerEnvFromSchematics, logger):
+@injected_pytest(test_design)
+async def test_docker_env_basic_schematics(schematics_universal, new_DockerEnvFromSchematics, logger):
     """Test basic DockerEnvFromSchematics functionality with a simple UV project"""
     logger.info("Testing basic DockerEnvFromSchematics with UV project")
     
@@ -78,18 +79,10 @@ async def a_test_docker_env_basic_schematics(schematics_universal, new_DockerEnv
     
     logger.info("✅ Basic schematics test passed")
 
-# Create IProxy and convert to pytest
-test_docker_env_basic_schematics_iproxy: IProxy = a_test_docker_env_basic_schematics(
-    injected("schematics_universal"), 
-    injected("new_DockerEnvFromSchematics"), 
-    injected("logger")
-)
-test_docker_env_basic_schematics = to_pytest(test_docker_env_basic_schematics_iproxy)
-
 
 # ===== Test 2: Mount functionality =====
-@injected
-async def a_test_docker_env_with_mounts(schematics_universal, new_DockerEnvFromSchematics, logger):
+@injected_pytest(test_design)
+async def test_docker_env_with_mounts(schematics_universal, new_DockerEnvFromSchematics, logger):
     """Test DockerEnvFromSchematics with various mount types"""
     logger.info("Testing DockerEnvFromSchematics with different mount types")
     
@@ -129,18 +122,10 @@ async def a_test_docker_env_with_mounts(schematics_universal, new_DockerEnvFromS
     
     logger.info("✅ Mount test passed")
 
-# Create IProxy and convert to pytest
-test_docker_env_with_mounts_iproxy: IProxy = a_test_docker_env_with_mounts(
-    injected("schematics_universal"), 
-    injected("new_DockerEnvFromSchematics"), 
-    injected("logger")
-)
-test_docker_env_with_mounts = to_pytest(test_docker_env_with_mounts_iproxy)
-
 
 # ===== Test 3: Multiple project types =====
-@injected
-async def a_test_docker_env_multiple_project_types(schematics_universal, new_DockerEnvFromSchematics, logger):
+@injected_pytest(test_design)
+async def test_docker_env_multiple_project_types(schematics_universal, new_DockerEnvFromSchematics, logger):
     """Test DockerEnvFromSchematics with different project types"""
     logger.info("Testing different project types with schematics")
     
@@ -174,18 +159,10 @@ async def a_test_docker_env_multiple_project_types(schematics_universal, new_Doc
             logger.error(f"❌ {name} test failed: {e}")
             raise
 
-# Create IProxy and convert to pytest
-test_docker_env_multiple_project_types_iproxy: IProxy = a_test_docker_env_multiple_project_types(
-    injected("schematics_universal"), 
-    injected("new_DockerEnvFromSchematics"), 
-    injected("logger")
-)
-test_docker_env_multiple_project_types = to_pytest(test_docker_env_multiple_project_types_iproxy)
-
 
 # ===== Test 4: Script context functionality =====
-@injected
-async def a_test_docker_env_script_context(schematics_universal, new_DockerEnvFromSchematics, logger, a_system):
+@injected_pytest(test_design)
+async def test_docker_env_script_context(schematics_universal, new_DockerEnvFromSchematics, logger, a_system):
     """Test DockerEnvFromSchematics script run context (upload/download)"""
     logger.info("Testing script run context functionality")
     
@@ -239,19 +216,10 @@ async def a_test_docker_env_script_context(schematics_universal, new_DockerEnvFr
         # Cleanup test file
         test_file.unlink()
 
-# Create IProxy and convert to pytest
-test_docker_env_script_context_iproxy: IProxy = a_test_docker_env_script_context(
-    injected("schematics_universal"), 
-    injected("new_DockerEnvFromSchematics"), 
-    injected("logger"), 
-    injected("a_system")
-)
-test_docker_env_script_context = to_pytest(test_docker_env_script_context_iproxy)
-
 
 # ===== Test 5: Builder integration =====
-@injected
-async def a_test_docker_env_builder_integration(schematics_universal, new_DockerEnvFromSchematics, logger):
+@injected_pytest(test_design)
+async def test_docker_env_builder_integration(schematics_universal, new_DockerEnvFromSchematics, logger):
     """Test that DockerBuilder scripts are properly integrated"""
     logger.info("Testing DockerBuilder script integration")
     
@@ -276,18 +244,10 @@ async def a_test_docker_env_builder_integration(schematics_universal, new_Docker
     
     logger.info("✅ Builder integration test passed")
 
-# Create IProxy and convert to pytest
-test_docker_env_builder_integration_iproxy: IProxy = a_test_docker_env_builder_integration(
-    injected("schematics_universal"), 
-    injected("new_DockerEnvFromSchematics"), 
-    injected("logger")
-)
-test_docker_env_builder_integration = to_pytest(test_docker_env_builder_integration_iproxy)
-
 
 # ===== Test 6: Without init functionality =====
-@injected
-async def a_test_docker_env_without_init(schematics_universal, new_DockerEnvFromSchematics, logger):
+@injected_pytest(test_design)
+async def test_docker_env_without_init(schematics_universal, new_DockerEnvFromSchematics, logger):
     """Test run_script_without_init method"""
     logger.info("Testing run_script_without_init")
     
@@ -309,18 +269,10 @@ async def a_test_docker_env_without_init(schematics_universal, new_DockerEnvFrom
     
     logger.info("✅ Without init test passed")
 
-# Create IProxy and convert to pytest
-test_docker_env_without_init_iproxy: IProxy = a_test_docker_env_without_init(
-    injected("schematics_universal"), 
-    injected("new_DockerEnvFromSchematics"), 
-    injected("logger")
-)
-test_docker_env_without_init = to_pytest(test_docker_env_without_init_iproxy)
-
 
 # ===== Test 7: Error handling =====
-@injected
-async def a_test_docker_env_error_handling(schematics_universal, new_DockerEnvFromSchematics, logger):
+@injected_pytest(test_design)
+async def test_docker_env_error_handling(schematics_universal, new_DockerEnvFromSchematics, logger):
     """Test error handling in DockerEnvFromSchematics"""
     logger.info("Testing error handling")
     
@@ -345,11 +297,3 @@ async def a_test_docker_env_error_handling(schematics_universal, new_DockerEnvFr
         assert True
     
     logger.info("✅ Error handling test passed")
-
-# Create IProxy and convert to pytest
-test_docker_env_error_handling_iproxy: IProxy = a_test_docker_env_error_handling(
-    injected("schematics_universal"), 
-    injected("new_DockerEnvFromSchematics"), 
-    injected("logger")
-)
-test_docker_env_error_handling = to_pytest(test_docker_env_error_handling_iproxy)

@@ -5,14 +5,12 @@ injection is working correctly and Docker builds use the specified context.
 """
 
 from pathlib import Path
-from pinjected import IProxy, design, injected
+from pinjected import design, injected
+from pinjected.test import injected_pytest
 from ml_nexus import load_env_design
 from ml_nexus.storage_resolver import StaticStorageResolver
 from loguru import logger
 import uuid
-
-# Import test utilities
-from test.iproxy_test_utils import to_pytest
 
 # Test storage resolver
 TEST_PROJECT_ROOT = Path(__file__).parent / "dummy_projects"
@@ -20,38 +18,31 @@ test_storage_resolver = StaticStorageResolver({
     "test_uv": TEST_PROJECT_ROOT / "test_uv",
 })
 
-# Module design with zeus context
+# Test design with zeus context
+test_design = design(
+    storage_resolver=test_storage_resolver,
+    logger=logger,
+    ml_nexus_docker_build_context="zeus",  # Set zeus as build context
+)
+
+# Module design
 __meta_design__ = design(
-    overrides=load_env_design + design(
-        storage_resolver=test_storage_resolver,
-        logger=logger,
-        ml_nexus_docker_build_context="zeus",  # Set zeus as build context
-    )
+    overrides=load_env_design + test_design
 )
 
 
 # ===== Test Docker context injection =====
-@injected
-async def a_test_docker_context_injection(
-    ml_nexus_docker_build_context,
-    logger
-):
+@injected_pytest(test_design)
+async def test_docker_context_injection(ml_nexus_docker_build_context, logger):
     """Verify that Docker context is properly injected"""
     logger.info(f"Docker build context is set to: {ml_nexus_docker_build_context}")
     assert ml_nexus_docker_build_context == "zeus", f"Expected 'zeus', got '{ml_nexus_docker_build_context}'"
     logger.info("✅ Docker context injection verified")
-    return ml_nexus_docker_build_context
-
-test_docker_context_injection_iproxy: IProxy = a_test_docker_context_injection(
-    injected("ml_nexus_docker_build_context"),
-    injected("logger")
-)
-test_docker_context_injection = to_pytest(test_docker_context_injection_iproxy)
 
 
 # ===== Test Docker build with context =====
-@injected
-async def a_test_docker_build_with_context(
+@injected_pytest(test_design)
+async def test_docker_build_with_context(
     new_DockerBuilder,
     a_build_docker,
     ml_nexus_docker_build_context,
@@ -87,18 +78,10 @@ async def a_test_docker_build_with_context(
         logger.error(f"Build failed: {e}")
         raise
 
-test_docker_build_with_context_iproxy: IProxy = a_test_docker_build_with_context(
-    injected("new_DockerBuilder"),
-    injected("a_build_docker"),
-    injected("ml_nexus_docker_build_context"),
-    injected("logger")
-)
-test_docker_build_with_context = to_pytest(test_docker_build_with_context_iproxy)
-
 
 # ===== Test multiple contexts override =====
-@injected
-async def a_test_context_override(logger):
+@injected_pytest(test_design)
+async def test_context_override(logger):
     """Test that context can be overridden in design"""
     
     # Create a new design with different context
@@ -119,12 +102,3 @@ async def a_test_context_override(logger):
     original = await check_original()
     assert original == "zeus", f"Expected 'zeus', got '{original}'"
     logger.info("✅ Original context preserved")
-
-test_context_override_iproxy: IProxy = a_test_context_override(injected("logger"))
-test_context_override = to_pytest(test_context_override_iproxy)
-
-
-# ===== IProxy entry points =====
-verify_zeus_context: IProxy = test_docker_context_injection_iproxy
-build_with_zeus: IProxy = test_docker_build_with_context_iproxy
-test_override: IProxy = test_context_override_iproxy
