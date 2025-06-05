@@ -155,12 +155,32 @@ class DockerHostEnvironment(IScriptRunner):
 """
         base64_encoded_script = base64.b64encode(final_script.encode('utf-8')).decode()
         cmd = await self.build_docker_cmd(f"bash /usr/local/bin/base64_runner.sh {base64_encoded_script}")
-        await self._a_system_parallel(f'ssh {self.docker_host} {cmd}')
+        result = await self._a_system_parallel(f'ssh {self.docker_host} {cmd}')
+        
+        if result.exit_code != 0:
+            from ml_nexus.util import CommandException
+            raise CommandException(
+                f"Script execution failed with exit code {result.exit_code}",
+                code=result.exit_code,
+                stdout=result.stdout,
+                stderr=result.stderr
+            )
+        return result
 
     async def run_script_without_init(self, script):
         base64_encoded_script = base64.b64encode(script.encode('utf-8')).decode()
         cmd = await self.build_docker_cmd(f"bash /usr/local/bin/base64_runner.sh {base64_encoded_script}")
-        await self._a_system_parallel(f'ssh {self.docker_host} {cmd}')
+        result = await self._a_system_parallel(f'ssh {self.docker_host} {cmd}')
+        
+        if result.exit_code != 0:
+            from ml_nexus.util import CommandException
+            raise CommandException(
+                f"Script execution failed with exit code {result.exit_code}",
+                code=result.exit_code,
+                stdout=result.stdout,
+                stderr=result.stderr
+            )
+        return result
 
     def container_path_to_host_path(self, path):
         return Path(

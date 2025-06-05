@@ -152,8 +152,10 @@ class DockerEnvFromSchematics(IScriptRunner):
 
     async def run_script(self, script: str):
         env = (await self._new_env())
-        return await env.run_script(script)
+        result = await env.run_script(script)
+        return result
 
     async def run_script_without_init(self, script: str):
         env = (await self._new_env())
-        return await env.run_script_without_init(script)
+        result = await env.run_script_without_init(script)
+        return result

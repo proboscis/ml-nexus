@@ -107,7 +107,17 @@ class PersistentDockerEnvFromSchematics(IScriptRunner):
         base64_encoded_script = base64.b64encode(final_script.encode('utf-8')).decode()
         cmd = f"docker exec {self.container_name} bash /usr/local/bin/base64_runner.sh {base64_encoded_script}"
         # await self._a_system(f'ssh {self.docker_host} {cmd}')
-        await self._a_system(cmd)
+        result = await self._a_system(cmd)
+        
+        if result.exit_code != 0:
+            from ml_nexus.util import CommandException
+            raise CommandException(
+                f"Script execution failed with exit code {result.exit_code}",
+                code=result.exit_code,
+                stdout=result.stdout,
+                stderr=result.stderr
+            )
+        return result
 
     async def stop(self):
         # await self._a_system(f"ssh {self.docker_host} docker stop {self.container_name}")
