@@ -15,7 +15,11 @@
       "Bash(grep:*)",
       "Bash(chmod:*)",
       "Bash(python test:*)",
-      "Bash(pytest:*)"
+      "Bash(pytest:*)",
+      "Bash(git commit:*)",
+      "Bash(uvx ruff check:*)",
+      "Bash(docker context:*)",
+      "Bash(docker:*)"
     ],
     "deny": []
   }

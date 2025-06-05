@@ -71,9 +71,6 @@ test_schematics_gpu: IProxy = schematics_universal(
     base_image='nvidia/cuda:12.3.1-devel-ubuntu22.04'
 )
 
-if __name__ == '__main__':
-    pass
-
 # Design override for testing
 __meta_design__ = design(
     # Add any necessary overrides for testing
