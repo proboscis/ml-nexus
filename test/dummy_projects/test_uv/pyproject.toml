@@ -1,0 +1,21 @@
+[project]
+name = "test-uv-project"
+version = "0.1.0"
+description = "Test UV project for ml-nexus schematics testing"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "requests>=2.31.0",
+    "pydantic>=2.0.0",
+]
+
+[tool.uv]
+# UV specific configuration
+dev-dependencies = [
+    "pytest>=7.0.0",
+    "black>=23.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

@@ -1,0 +1,37 @@
+{
+  "metadata": {
+    "version": "1.0.0",
+    "created": "2024-01-15",
+    "author": "Test User"
+  },
+  "settings": {
+    "debug": false,
+    "timeout": 30,
+    "retries": 3
+  },
+  "users": [
+    {
+      "id": 1,
+      "name": "Alice",
+      "email": "alice@example.com",
+      "role": "admin"
+    },
+    {
+      "id": 2,
+      "name": "Bob",
+      "email": "bob@example.com",
+      "role": "user"
+    },
+    {
+      "id": 3,
+      "name": "Charlie",
+      "email": "charlie@example.com",
+      "role": "user"
+    }
+  ],
+  "features": {
+    "authentication": true,
+    "notifications": true,
+    "analytics": false
+  }
+}

@@ -6,7 +6,16 @@
       "Bash(git grep:*)",
       "Bash(git push:*)",
       "Bash(ls:*)",
-      "Bash(rye run:*)"
+      "Bash(rye run:*)",
+      "Bash(rg:*)",
+      "Bash(/opt/homebrew/Cellar/ripgrep/14.1.1/bin/rg -B2 -A2 \"8gb|8GB|cache.*size|cache.*limit\" --type py)",
+      "Bash(uv run:*)",
+      "Bash(rm:*)",
+      "Bash(mkdir:*)",
+      "Bash(grep:*)",
+      "Bash(chmod:*)",
+      "Bash(python test:*)",
+      "Bash(pytest:*)"
     ],
     "deny": []
   }

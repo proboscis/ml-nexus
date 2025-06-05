@@ -1,0 +1,44 @@
+# Configuration file for resource-only project
+app:
+  name: "Resource Test App"
+  version: "1.0.0"
+  environment: "development"
+
+server:
+  host: "localhost"
+  port: 8080
+  ssl_enabled: false
+  max_connections: 100
+
+database:
+  type: "postgresql"
+  host: "localhost"
+  port: 5432
+  name: "testdb"
+  pool_size: 20
+
+logging:
+  level: "INFO"
+  format: "json"
+  output:
+    - type: "console"
+      enabled: true
+    - type: "file"
+      enabled: true
+      path: "/var/log/app.log"
+      max_size: "10MB"
+      max_files: 5
+
+features:
+  cache:
+    enabled: true
+    ttl: 3600
+    backend: "redis"
+  
+  rate_limiting:
+    enabled: true
+    requests_per_minute: 60
+    
+  monitoring:
+    enabled: false
+    endpoint: "http://monitoring.example.com"

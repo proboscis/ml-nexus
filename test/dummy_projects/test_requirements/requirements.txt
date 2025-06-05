@@ -1,0 +1,5 @@
+requests==2.31.0
+pandas==2.1.4
+numpy==1.26.2
+flask==3.0.0
+pytest==7.4.3
