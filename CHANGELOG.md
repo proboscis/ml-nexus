@@ -19,10 +19,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Changed all `docker_host="localhost"` and `docker_host='local'` to `docker_host="zeus"`
   - Added `ml_nexus_docker_build_context="zeus"` to test design configurations
   - Ensures tests work correctly with the required Docker infrastructure
+- Fixed test assertions to use `PsResult.stdout` attribute correctly
+  - Updated all test files that were asserting against the PsResult object directly
+  - Changed assertions from `assert "text" in result` to `assert "text" in result.stdout`
+  - Ensures proper handling of script execution results in tests
 
 ### Added
 - `test/PINJECTED_USAGE_ANALYSIS.md` - Comprehensive analysis of Pinjected usage issues across test files
 - `test/PINJECTED_MIGRATION_PLAN.md` - Systematic migration plan for converting tests to best practices
+- `test/test_auto_pyvenv_docker_env.py` - Test suite for auto-detection of pyvenv projects
+  - Verifies that projects with `kind='auto'` correctly use pyvenv setup
+  - Tests auto-detection for both `requirements.txt` and `setup.py` projects
+  - Confirms pyenv installation is included in Docker build macros
+  - Validates that pyvenv setup differs from direct UV/Rye configurations
+
+### Removed
+- `test/test_all_schematics_kinds.py` - Redundant test file that duplicated functionality
+  - Used deprecated IProxy patterns at module level
+  - Functionality is already covered by `test_schematics_universal_macros.py`
+  - Removal improves test suite maintainability
 
 ## [0.0.8]
 
