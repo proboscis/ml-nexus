@@ -4,7 +4,10 @@ from abc import ABC
 from dataclasses import dataclass, field, replace
 from itertools import chain
 from pathlib import Path
-from typing import Optional, Callable, Awaitable, Literal
+from typing import Optional, Callable, Awaitable, Literal, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ml_nexus.util import PsResult
 from pinjected.compatibility.task_group import TaskGroup
 import pandas as pd
 
@@ -178,7 +181,7 @@ class IScriptRunner(IRunner):
         raise NotImplementedError()
 
     @abc.abstractmethod
-    async def run_script(self, script: str):
+    async def run_script(self, script: str) -> 'PsResult':
         pass
 
     async def run(self, command: str):

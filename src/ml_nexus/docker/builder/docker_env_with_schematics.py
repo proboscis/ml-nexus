@@ -9,6 +9,7 @@ from ml_nexus.rsync_util import RsyncLocation
 from ml_nexus.schematics import ContainerSchematic, \
     CacheMountRequest, ResolveMountRequest, DirectMountRequest, ContextualMountRequest
 from ml_nexus.storage_resolver import IStorageResolver
+from ml_nexus.util import PsResult
 
 
 @dataclass
@@ -150,10 +151,12 @@ class DockerEnvFromSchematics(IScriptRunner):
         host_dst = self.placement.direct_root / hash_name
         return await self._rsync_mount(source, host_dst, mount_point, excludes)
 
-    async def run_script(self, script: str):
+    async def run_script(self, script: str) -> PsResult:
         env = (await self._new_env())
-        return await env.run_script(script)
+        result = await env.run_script(script)
+        return result
 
-    async def run_script_without_init(self, script: str):
+    async def run_script_without_init(self, script: str) -> PsResult:
         env = (await self._new_env())
-        return await env.run_script_without_init(script)
+        result = await env.run_script_without_init(script)
+        return result
