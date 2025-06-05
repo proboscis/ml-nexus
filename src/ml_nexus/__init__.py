@@ -176,6 +176,8 @@ def __load_default_design():
         new_RsyncArgs=injected(RsyncArgs),
 
         ml_nexus_debug_docker_build=True,
+        # Docker build context configuration (e.g., 'zeus', 'default', 'colima')
+        ml_nexus_docker_build_context=ml_nexus_get_env("ML_NEXUS_DOCKER_BUILD_CONTEXT", None),
         # ml_nexus_default_docker_host_upload_root=ml_nexus_get_env_path("ML_NEXUS_DEFAULT_DOCKER_HOST_UPLOAD_ROOT",
         #                                                                "/tmp/ml_nexus"),
         # docker host mounter
