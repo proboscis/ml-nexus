@@ -1,0 +1,32 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Added
+- Docker context support for building images on different Docker endpoints (e.g., zeus, colima)
+  - New `ml_nexus_docker_build_context` configuration parameter
+  - Configurable via environment variable `ML_NEXUS_DOCKER_BUILD_CONTEXT`
+  - Can be overridden in project design configuration
+- SSH-based remote Docker build function `a_build_docker_ssh_remote` for backward compatibility
+- Comprehensive documentation for DockerHostEnv workflow in `doc/docker_host_env_workflow.md`
+  - Architecture diagrams and workflow sequences
+  - Building, syncing, and running process explanations
+  - Docker context configuration examples
+
+### Changed
+- Updated `a_build_docker` and `a_build_docker_no_buildkit` to support Docker contexts
+  - When context is specified, uses `docker --context <name>` format
+  - Maintains backward compatibility when no context is specified
+
+### Documentation
+- Created detailed workflow documentation explaining:
+  - How Docker host is set during `DockerHostEnv.run_script()`
+  - Building process with macro system
+  - Syncing process using rsync
+  - Volume mounting strategy
+  - Performance optimizations

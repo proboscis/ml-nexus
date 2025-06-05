@@ -7,7 +7,24 @@
       "Bash(git push:*)",
       "Bash(ls:*)",
       "Bash(rye run:*)",
-      "Bash(git branch:*)"
+      "Bash(git branch:*)",
+      "Bash(rg:*)",
+      "Bash(/opt/homebrew/Cellar/ripgrep/14.1.1/bin/rg -B2 -A2 \"8gb|8GB|cache.*size|cache.*limit\" --type py)",
+      "Bash(uv run:*)",
+      "Bash(rm:*)",
+      "Bash(mkdir:*)",
+      "Bash(grep:*)",
+      "Bash(chmod:*)",
+      "Bash(python test:*)",
+      "Bash(pytest:*)",
+      "Bash(git commit:*)",
+      "Bash(uvx ruff check:*)",
+      "Bash(docker context:*)",
+      "Bash(docker:*)",
+      "Bash(git branch:*)",
+      "Bash(touch:*)",
+      "Bash(cat:*)",
+      "Bash(ln:*)"
     ],
     "deny": []
   }

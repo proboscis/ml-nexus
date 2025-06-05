@@ -167,6 +167,8 @@ async def build_image_with_rsync(
 async def a_build_docker_no_buildkit(
         a_system,
         ml_nexus_debug_docker_build,
+        ml_nexus_docker_build_context,
+        logger,
         /,
         tag,
         context_dir,
@@ -174,17 +176,25 @@ async def a_build_docker_no_buildkit(
         push: bool = False,
         build_id=None
 ):
-    await a_system(f"DOCKER_BUILDKIT=0 docker build {options} -t {tag} {context_dir}")
+    # Build docker command with context if specified
+    docker_cmd = "docker"
+    if ml_nexus_docker_build_context:
+        logger.info(f"Using Docker context: {ml_nexus_docker_build_context}")
+        docker_cmd = f"docker --context {ml_nexus_docker_build_context}"
+    
+    await a_system(f"DOCKER_BUILDKIT=0 {docker_cmd} build {options} -t {tag} {context_dir}")
     if ml_nexus_debug_docker_build:
-        await a_system(f"docker history {tag}")
+        await a_system(f"{docker_cmd} history {tag}")
     if push:
-        await a_system(f"docker push {tag}")
+        await a_system(f"{docker_cmd} push {tag}")
     return tag
 
 @injected
 async def a_build_docker(
         a_system,
         ml_nexus_debug_docker_build,
+        ml_nexus_docker_build_context,
+        logger,
         /,
         tag,
         context_dir,
@@ -192,11 +202,72 @@ async def a_build_docker(
         push: bool = False,
         build_id=None
 ):
-    await a_system(f"docker build {options} -t {tag} {context_dir}")
+    # Build docker command with context if specified
+    docker_cmd = "docker"
+    if ml_nexus_docker_build_context:
+        logger.info(f"Using Docker context: {ml_nexus_docker_build_context}")
+        docker_cmd = f"docker --context {ml_nexus_docker_build_context}"
+    
+    # Execute docker build
+    build_cmd = f"{docker_cmd} build {options} -t {tag} {context_dir}"
+    logger.debug(f"Executing build command: {build_cmd}")
+    await a_system(build_cmd)
+    
     if ml_nexus_debug_docker_build:
-        await a_system(f"docker history {tag}")
+        await a_system(f"{docker_cmd} history {tag}")
+    
     if push:
-        await a_system(f"docker push {tag}")
+        logger.info(f"Pushing image {tag}")
+        await a_system(f"{docker_cmd} push {tag}")
+    
+    return tag
+
+
+@injected
+async def a_build_docker_ssh_remote(
+        a_system,
+        ml_nexus_debug_docker_build,
+        logger,
+        /,
+        tag,
+        context_dir,
+        options: str,
+        remote_host: str,
+        push: bool = False,
+        build_id=None
+):
+    """Build Docker image on a remote host via SSH.
+    
+    This function transfers the build context to a remote host and executes
+    docker build there. Use this when you need to build on a specific machine
+    that doesn't have a Docker context configured.
+    """
+    logger.info(f"Building Docker image on remote host via SSH: {remote_host}")
+    
+    # Generate unique remote context directory
+    import uuid
+    remote_context = f"/tmp/docker-build-{build_id or uuid.uuid4().hex[:8]}"
+    
+    try:
+        # Transfer build context to remote host
+        logger.info(f"Transferring build context to {remote_host}:{remote_context}")
+        await a_system(f"rsync -avz --progress {context_dir}/ {remote_host}:{remote_context}/")
+        
+        # Execute docker build on remote host
+        logger.info(f"Building image {tag} on remote host")
+        await a_system(f"ssh {remote_host} 'docker build {options} -t {tag} {remote_context}'")
+        
+        if ml_nexus_debug_docker_build:
+            await a_system(f"ssh {remote_host} 'docker history {tag}'")
+        
+        if push:
+            logger.info(f"Pushing image {tag} from remote host")
+            await a_system(f"ssh {remote_host} 'docker push {tag}'")
+    finally:
+        # Cleanup remote build context
+        logger.info(f"Cleaning up remote build context: {remote_context}")
+        await a_system(f"ssh {remote_host} 'rm -rf {remote_context}'")
+    
     return tag
 
 
