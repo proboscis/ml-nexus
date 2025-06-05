@@ -145,7 +145,7 @@ class DockerHostEnvironment(IScriptRunner):
         docker_cmd = f"docker run --gpus all --net={self.network} {self.mounter.docker_opts(self.project.placement)} {volume_options} {opts} --shm-size={self.shared_memory_size} --rm {image} {cmd}"
         return docker_cmd
 
-    async def run_script(self, script: str):
+    async def run_script(self, script: str) -> 'PsResult':
         # init_script = await self.docker_builder.a_entrypoint_script()
         init_script = "\n".join(self.docker_builder.scripts)
 
@@ -167,7 +167,7 @@ class DockerHostEnvironment(IScriptRunner):
             )
         return result
 
-    async def run_script_without_init(self, script):
+    async def run_script_without_init(self, script: str) -> 'PsResult':
         base64_encoded_script = base64.b64encode(script.encode('utf-8')).decode()
         cmd = await self.build_docker_cmd(f"bash /usr/local/bin/base64_runner.sh {base64_encoded_script}")
         result = await self._a_system_parallel(f'ssh {self.docker_host} {cmd}')

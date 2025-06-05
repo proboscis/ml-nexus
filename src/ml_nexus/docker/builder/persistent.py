@@ -90,7 +90,7 @@ class PersistentDockerEnvFromSchematics(IScriptRunner):
         await self.container.prepare_mounts()  # ensuring source/resource uploads
         self._logger.info(f"Container {self.container_name} is ready")
 
-    async def run_script(self, script: str):
+    async def run_script(self, script: str) -> 'PsResult':
         """
         1. ensure the container is running
         2. send base64 encoded script and run it via docker exec
