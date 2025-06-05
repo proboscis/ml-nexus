@@ -21,7 +21,7 @@ test_source_schematics: IProxy = schematics_universal(
 test_source_env: IProxy = injected(DockerEnvFromSchematics)(
     project=test_source_project,
     schematics=test_source_schematics,
-    docker_host='local'
+    docker_host='zeus'
 )
 test_source_run: IProxy = test_source_env.run_script("""
 echo "Testing source kind - no Python environment"
@@ -40,7 +40,7 @@ test_resource_schematics: IProxy = schematics_universal(
 test_resource_env: IProxy = injected(DockerEnvFromSchematics)(
     project=test_resource_project,
     schematics=test_resource_schematics,
-    docker_host='local'
+    docker_host='zeus'
 )
 test_resource_run: IProxy = test_resource_env.run_script("""
 echo "Testing resource kind"
@@ -58,7 +58,7 @@ test_auto_schematics: IProxy = schematics_universal(
 test_auto_env: IProxy = injected(DockerEnvFromSchematics)(
     project=test_auto_project,
     schematics=test_auto_schematics,
-    docker_host='local'
+    docker_host='zeus'
 )
 test_auto_run: IProxy = test_auto_env.run_script("""
 echo "Testing auto kind - should detect UV project"
@@ -77,7 +77,7 @@ test_uv_schematics: IProxy = schematics_universal(
 test_uv_env: IProxy = injected(PersistentDockerEnvFromSchematics)(
     project=test_uv_project,
     schematics=test_uv_schematics,
-    docker_host='local',
+    docker_host='zeus',
     container_name='test_uv_kind'
 )
 test_uv_run: IProxy = test_uv_env.run_script("""
@@ -99,7 +99,7 @@ test_rye_schematics: IProxy = schematics_universal(
 test_rye_env: IProxy = injected(DockerEnvFromSchematics)(
     project=test_rye_project,
     schematics=test_rye_schematics,
-    docker_host='local'
+    docker_host='zeus'
 )
 test_rye_run: IProxy = test_rye_env.run_script("""
 echo "Testing Rye kind"
@@ -119,7 +119,7 @@ test_setuppy_schematics: IProxy = schematics_universal(
 test_setuppy_env: IProxy = injected(DockerEnvFromSchematics)(
     project=test_setuppy_project,
     schematics=test_setuppy_schematics,
-    docker_host='local'
+    docker_host='zeus'
 )
 test_setuppy_run: IProxy = test_setuppy_env.run_script("""
 echo "Testing setup.py kind"
@@ -141,7 +141,7 @@ test_mixed_schematics: IProxy = schematics_universal(
 test_mixed_env: IProxy = injected(DockerEnvFromSchematics)(
     project=test_mixed_project,
     schematics=test_mixed_schematics,
-    docker_host='local'
+    docker_host='zeus'
 )
 test_mixed_run: IProxy = test_mixed_env.run_script("""
 echo "Testing mixed kinds"
@@ -163,6 +163,6 @@ test_gpu_schematics: IProxy = schematics_universal(
 # Design configuration
 __meta_design__ = design(
     overrides=load_env_design + design(
-        docker_host='local'  # Override to use local docker
+        docker_host='zeus'  # Override to use local docker
     )
 )

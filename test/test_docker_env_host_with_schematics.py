@@ -38,7 +38,8 @@ test_design = design(
         source_root=Path("/tmp/ml-nexus-test/source"),
         direct_root=Path("/tmp/ml-nexus-test/direct"),
     ),
-    docker_host="localhost",  # Default test host
+    docker_host="zeus",  # Required Docker host for this repo
+    ml_nexus_docker_build_context="zeus",  # Use zeus Docker context for builds
 )
 
 # Module design configuration
@@ -66,7 +67,7 @@ async def test_docker_env_basic_schematics(schematics_universal, new_DockerEnvFr
     docker_env = new_DockerEnvFromSchematics(
         project=project,
         schematics=schematic,
-        docker_host="localhost"
+        docker_host="zeus"
     )
     
     # Test basic script execution
@@ -113,7 +114,7 @@ async def test_docker_env_with_mounts(schematics_universal, new_DockerEnvFromSch
     docker_env = new_DockerEnvFromSchematics(
         project=project,
         schematics=schematic,
-        docker_host="localhost"
+        docker_host="zeus"
     )
     
     # Test mount availability
@@ -148,7 +149,7 @@ async def test_docker_env_multiple_project_types(schematics_universal, new_Docke
         docker_env = new_DockerEnvFromSchematics(
             project=project,
             schematics=schematic,
-            docker_host="localhost"
+            docker_host="zeus"
         )
         
         try:
@@ -175,7 +176,7 @@ async def test_docker_env_script_context(schematics_universal, new_DockerEnvFrom
     docker_env = new_DockerEnvFromSchematics(
         project=project,
         schematics=schematic,
-        docker_host="localhost"
+        docker_host="zeus"
     )
     
     # Create a test file to upload
@@ -235,7 +236,7 @@ async def test_docker_env_builder_integration(schematics_universal, new_DockerEn
     docker_env = new_DockerEnvFromSchematics(
         project=project,
         schematics=schematic,
-        docker_host="localhost"
+        docker_host="zeus"
     )
     
     # Test that the builder script is executed
@@ -260,7 +261,7 @@ async def test_docker_env_without_init(schematics_universal, new_DockerEnvFromSc
     docker_env = new_DockerEnvFromSchematics(
         project=project,
         schematics=schematic,
-        docker_host="localhost"
+        docker_host="zeus"
     )
     
     # Test running script without initialization
@@ -285,7 +286,7 @@ async def test_docker_env_error_handling(schematics_universal, new_DockerEnvFrom
     docker_env = new_DockerEnvFromSchematics(
         project=project,
         schematics=schematic,
-        docker_host="localhost"
+        docker_host="zeus"
     )
     
     # Test command that should fail

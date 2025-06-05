@@ -68,7 +68,7 @@ run_script_zeus: IProxy = remote_docker_env.run_script('echo "Hello, World!"')
 local_docker_env = injected(DockerEnvFromSchematics)(
     project=project_uv_with_accelerator,
     schematics=hacked_schematics,
-    docker_host='localhost',
+    docker_host='zeus',
     placement=DockerHostPlacement(
         cache_root=Path('/tmp/cache_root'),
         resource_root=Path('/tmp/resource_root'),
@@ -84,6 +84,8 @@ test_design = design(
         Path("~/repos/ml-nexus-test-repositories").expanduser(),
     ),
     logger=logger,
+    docker_host="zeus",  # Required Docker host for this repo
+    ml_nexus_docker_build_context="zeus",  # Use zeus Docker context for builds
 )
 
 __meta_design__ = design(

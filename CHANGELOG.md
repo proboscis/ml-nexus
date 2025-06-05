@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added proper test design configurations for each test module
   - Maintained backward compatibility with IProxy definitions for direct execution
 - Improved test maintainability and compliance with Pinjected framework best practices
+- Updated all test files to use 'zeus' Docker host exclusively
+  - Changed all `docker_host="localhost"` and `docker_host='local'` to `docker_host="zeus"`
+  - Added `ml_nexus_docker_build_context="zeus"` to test design configurations
+  - Ensures tests work correctly with the required Docker infrastructure
 
 ### Added
 - `test/PINJECTED_USAGE_ANALYSIS.md` - Comprehensive analysis of Pinjected usage issues across test files

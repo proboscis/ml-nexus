@@ -26,7 +26,9 @@ test_storage_resolver = StaticStorageResolver({
 # Test design configuration
 test_design = design(
     storage_resolver=test_storage_resolver,
-    logger=logger
+    logger=logger,
+    docker_host="zeus",  # Required Docker host for this repo
+    ml_nexus_docker_build_context="zeus",  # Use zeus Docker context for builds
 )
 
 # Module design configuration
@@ -53,7 +55,7 @@ async def test_uv_docker_python(schematics_universal, new_DockerEnvFromSchematic
     docker_env = new_DockerEnvFromSchematics(
         project=project,
         schematics=schematic,
-        docker_host="localhost"  # This should be configured based on your setup
+        docker_host="zeus"  # Required Docker host for this repo
     )
     
     # Test 1: Run Python version command
@@ -90,7 +92,7 @@ async def test_rye_docker_python(schematics_universal, new_DockerEnvFromSchemati
     docker_env = new_DockerEnvFromSchematics(
         project=project,
         schematics=schematic,
-        docker_host="localhost"
+        docker_host="zeus"
     )
     
     # Test Python availability
@@ -123,7 +125,7 @@ async def test_requirements_docker_python(schematics_universal, new_DockerEnvFro
     docker_env = new_DockerEnvFromSchematics(
         project=project,
         schematics=schematic,
-        docker_host="localhost"
+        docker_host="zeus"
     )
     
     # Test Python availability
@@ -156,7 +158,7 @@ async def test_setuppy_docker_python(schematics_universal, new_DockerEnvFromSche
     docker_env = new_DockerEnvFromSchematics(
         project=project,
         schematics=schematic,
-        docker_host="localhost"
+        docker_host="zeus"
     )
     
     # Test Python availability
@@ -189,7 +191,7 @@ async def test_source_docker_no_python(schematics_universal, new_DockerEnvFromSc
     docker_env = new_DockerEnvFromSchematics(
         project=project,
         schematics=schematic,
-        docker_host="localhost"
+        docker_host="zeus"
     )
     
     # Test that Python is NOT available (source projects don't set up Python)
