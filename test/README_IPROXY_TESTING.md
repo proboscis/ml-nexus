@@ -45,13 +45,13 @@ For files with many IProxy tests, you can convert them all at once:
 
 ```bash
 # List IProxy tests in a file
-python test/convert_iproxy_tests.py test_all_schematics_kinds.py --list
+python test/convert_iproxy_tests.py test_schematics_universal_kinds.py --list
 
 # Convert to pytest-compatible module
-python test/convert_iproxy_tests.py test_all_schematics_kinds.py -o test_all_schematics_pytest.py
+python test/convert_iproxy_tests.py test_schematics_universal_kinds.py -o test_schematics_universal_pytest.py
 
 # Run the converted tests
-pytest test_all_schematics_pytest.py -v
+pytest test_schematics_universal_pytest.py -v
 ```
 
 ## Complete Example

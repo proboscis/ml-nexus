@@ -24,7 +24,10 @@
       "Bash(git branch:*)",
       "Bash(touch:*)",
       "Bash(cat:*)",
-      "Bash(ln:*)"
+      "Bash(ln:*)",
+      "Bash(git pull:*)",
+      "Bash(git stash:*)",
+      "Bash(git rm:*)"
     ],
     "deny": []
   }

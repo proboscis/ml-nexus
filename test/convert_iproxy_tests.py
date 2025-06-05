@@ -2,7 +2,7 @@
 """Script to convert IProxy test objects to pytest-compatible modules
 
 Usage:
-    python convert_iproxy_tests.py test_all_schematics_kinds.py -o test_all_schematics_pytest.py
+    python convert_iproxy_tests.py test_schematics_universal_kinds.py -o test_schematics_universal_pytest.py
     python convert_iproxy_tests.py test_schematics_working_kinds.py --list
 """
 

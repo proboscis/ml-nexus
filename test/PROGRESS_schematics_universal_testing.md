@@ -192,7 +192,7 @@ Successfully tested all implemented ProjectDir kinds with the following results:
 ### Test Files Created
 
 1. `test_schematics_working_kinds.py` - Final working test for all implemented kinds
-2. `test_all_schematics_kinds.py` - Comprehensive test (includes unimplemented kinds)
+2. `test_schematics_universal_macros.py` - Comprehensive test with @injected_pytest
 3. `test_schematics_uv_only.py` - Single UV kind test for debugging
 4. `test/__init__.py` - Updated with logger configuration
 
