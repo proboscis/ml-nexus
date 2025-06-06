@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Changed from `readlink -f` to `readlink` to avoid resolving all symlinks in path
   - Ensures MLPlatform mount validation passes and virtualenvs are stored on NFS volumes
   - Preserves existing behavior for non-symlink directories (backward compatible)
+- Fixed `PersistentDockerEnvFromSchematics` to properly use `ml_nexus_docker_build_context`
+  - Added `_ml_nexus_docker_build_context` as injected dependency
+  - All Docker operations (exec, stop, cp, rsync) now respect the configured Docker context
+  - Updated `a_docker_ps` function to support Docker context for consistency
+  - Ensures persistent containers work correctly with different Docker endpoints (e.g., zeus, colima)
 
 ### Added
 - `doc/storage_resolver_architecture.md` - Comprehensive documentation for StorageResolver system
