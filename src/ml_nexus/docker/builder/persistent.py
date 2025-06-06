@@ -23,9 +23,19 @@ async def a_docker_ps(
     # Build docker command with context if specified
     docker_cmd = f"docker --context {ml_nexus_docker_build_context}" if ml_nexus_docker_build_context else "docker"
     
-    # ps: PsResult = await a_system(f"ssh {docker_host} \"{docker_cmd} ps -a --format '{{{{json .}}}}'\"")
+    # Determine if we need SSH based on context and host
+    if ml_nexus_docker_build_context:
+        # When using Docker context, no SSH needed - context handles remote connection
+        cmd = f"{docker_cmd} ps -a --format '{{json .}}'"
+    elif docker_host and docker_host not in ["localhost", "127.0.0.1"]:
+        # Remote host without context - use SSH
+        cmd = f"ssh {docker_host} \"{docker_cmd} ps -a --format '{{{{json .}}}}'\"" 
+    else:
+        # Local Docker
+        cmd = f"{docker_cmd} ps -a --format '{{json .}}'"
+    
     ps = await asyncio.subprocess.create_subprocess_shell(
-        f"ssh {docker_host} \"{docker_cmd} ps -a --format '{{{{json .}}}}'\"",
+        cmd,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE
     )
@@ -33,7 +43,8 @@ async def a_docker_ps(
 
     data = [json.loads(line.strip()) for line in stdout.decode().split("\n") if line.strip()]
     df = pd.DataFrame(data)
-    df.set_index("Names", inplace=True)
+    if not df.empty:
+        df.set_index("Names", inplace=True)
     return df
 
 
