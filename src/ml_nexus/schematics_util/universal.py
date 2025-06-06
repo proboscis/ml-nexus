@@ -128,17 +128,28 @@ async def a_pyenv_component_embedded(
     dependency_install_macro = []
     if requirements_path.exists():
         # For requirements.txt, we can install dependencies before copying source
-        # Escape the command properly for shell execution
-        escaped_command = (
-            venv_setup.command.strip().replace("'", "'\\''").replace("\n", " && ")
+        # For embedded components, we need to run the pyenv setup during build
+        venv_path = Path(
+            f"/root/virtualenvs/{target_id}_{sha256(target_id.encode()).hexdigest()[:6]}"
         )
+        pyenv_setup_and_install = f"""
+set -e
+export PYENV_ROOT={Path("/root/.pyenv")}
+export PYTHON_VERSION={python_version}
+export VENV_NAME={target_id}
+export VENV_PATH={venv_path}
+export PIP_CACHE_DIR={Path("/root/pip_cache/pip")}
+/ensure_pyenv_virtualenv.sh
+source {venv_path}/bin/activate
+pip install -r requirements.txt
+"""
         dependency_install_macro = [
             RCopy(
                 src=requirements_path,
                 dst=Path(target.default_working_dir) / "requirements.txt",
             ),
             f"WORKDIR {target.default_working_dir}",
-            f"RUN --mount=type=cache,target=/root/pip_cache/pip sh -c '{escaped_command} && pip install -r requirements.txt'",
+            f"RUN --mount=type=cache,target=/root/pip_cache/pip sh -c '{pyenv_setup_and_install.strip()}'",
         ]
 
     # Copy all project files (excluding common build artifacts)
@@ -174,13 +185,28 @@ async def a_pyenv_component_embedded(
     # If setup.py exists, install it after source code is copied
     final_install = []
     if setup_py_path.exists():
-        # Escape the command properly for shell execution
-        escaped_command = (
-            venv_setup.command.strip().replace("'", "'\\''").replace("\n", " && ")
+        # For embedded components, we need to activate the venv and install
+        venv_path = Path(
+            f"/root/virtualenvs/{target_id}_{sha256(target_id.encode()).hexdigest()[:6]}"
         )
+        pyenv_activate_and_install = f"""
+source {venv_path}/bin/activate
+cd {target.default_working_dir}
+pip install -e .
+"""
         final_install.append(
-            f"RUN --mount=type=cache,target=/root/pip_cache/pip sh -c '{escaped_command} && cd {target.default_working_dir} && pip install -e .'"
+            f"RUN --mount=type=cache,target=/root/pip_cache/pip sh -c '{pyenv_activate_and_install.strip()}'"
         )
+
+    # For embedded components, we need to extract only the activation part from venv_setup.command
+    # The full installation happens during Docker build, not at runtime
+    venv_path = Path(
+        f"/root/virtualenvs/{target_id}_{sha256(target_id.encode()).hexdigest()[:6]}"
+    )
+    activation_script = f"""
+echo "ACTIVATING VENV at {venv_path}"
+source {venv_path}/bin/activate
+"""
 
     return EnvComponent(
         installation_macro=[
@@ -189,7 +215,7 @@ async def a_pyenv_component_embedded(
             *project_copy_macro,
             *final_install,
         ],
-        init_script=[f"cd {target.default_working_dir}", venv_setup.command],
+        init_script=[f"cd {target.default_working_dir}", activation_script.strip()],
         dependencies=[base_apt_packages_component],
         mounts=[],  # No cache mounts for embedded components - everything is in the image
     )
