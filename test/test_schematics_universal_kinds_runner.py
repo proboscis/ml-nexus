@@ -149,7 +149,7 @@ async def test_uv_kind_persistent(schematics_universal, new_PersistentDockerEnvF
     finally:
         # Clean up persistent container
         try:
-            await docker_env.cleanup()
+            await docker_env.stop()
         except Exception:
             pass
 

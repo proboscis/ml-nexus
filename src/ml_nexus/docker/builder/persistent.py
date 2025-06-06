@@ -26,13 +26,13 @@ async def a_docker_ps(
     # Determine if we need SSH based on context and host
     if ml_nexus_docker_build_context:
         # When using Docker context, no SSH needed - context handles remote connection
-        cmd = f"{docker_cmd} ps -a --format '{{json .}}'"
+        cmd = f"{docker_cmd} ps -a --format '{{{{json .}}}}'"
     elif docker_host and docker_host not in ["localhost", "127.0.0.1"]:
         # Remote host without context - use SSH
         cmd = f"ssh {docker_host} \"{docker_cmd} ps -a --format '{{{{json .}}}}'\"" 
     else:
         # Local Docker
-        cmd = f"{docker_cmd} ps -a --format '{{json .}}'"
+        cmd = f"{docker_cmd} ps -a --format '{{{{json .}}}}'"
     
     ps = await asyncio.subprocess.create_subprocess_shell(
         cmd,
