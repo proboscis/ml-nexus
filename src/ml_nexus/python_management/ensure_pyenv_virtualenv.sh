@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# This script ensures pyenv and a Python virtualenv are properly set up.
+# It returns proper error codes if virtualenv creation fails.
+# No fallback to temporary virtualenv - errors are propagated to the caller.
+
 # Default values for environment variables
 : "${PYENV_ROOT:="$HOME/.pyenv"}"
 : "${PYTHON_VERSION:="3.11"}"
@@ -142,44 +146,7 @@ is_valid_virtualenv() {
     [ -f "$venv_dir/pyvenv.cfg" ]
 }
 
-# Create a temp directory virtualenv if we can't write to the specified location
-create_temp_virtualenv() {
-    local temp_venv_dir="$(mktemp -d -t venv-XXXXXX 2>/dev/null || echo "/tmp/temp_venv_$$")"
-    if [ ! -d "$temp_venv_dir" ]; then
-        mkdir -p "$temp_venv_dir" 2>/dev/null
-    fi
-
-    if [ ! -d "$temp_venv_dir" ] || [ ! -w "$temp_venv_dir" ]; then
-        log_message "Failed to create temporary directory for virtualenv"
-        return 1
-    fi
-
-    log_message "Creating temporary virtualenv at $temp_venv_dir"
-    if python -m venv "$temp_venv_dir"; then
-        log_message "Successfully created temporary virtualenv"
-        log_message "To use this virtualenv, run: source $temp_venv_dir/bin/activate"
-
-        # Create a symlink if possible
-        if [ ! -e "$VENV_PATH" ] && [ -w "$(dirname "$VENV_PATH")" ]; then
-            ln -sf "$temp_venv_dir" "$VENV_PATH"
-            log_message "Created symlink from $VENV_PATH to $temp_venv_dir"
-        else
-            log_message "WARNING: Could not create symlink from $VENV_PATH to temporary virtualenv"
-            log_message "Please use the temporary virtualenv directly"
-        fi
-
-        # Generate activation script for the temp virtualenv
-        cat > activate_temp_venv.sh << EOF
-#!/bin/bash
-source "$temp_venv_dir/bin/activate"
-EOF
-        chmod +x activate_temp_venv.sh
-        return 0
-    else
-        log_message "Failed to create temporary virtualenv"
-        return 1
-    fi
-}
+# Removed temp virtualenv creation - script now returns errors properly
 
 # Create virtualenv using Python's built-in venv module
 setup_virtualenv() {
@@ -192,18 +159,14 @@ setup_virtualenv() {
         else
             log_message "Failed to create parent directory $parent_dir"
             debug_info
-            log_message "Attempting to create a temporary virtualenv instead"
-            create_temp_virtualenv
-            return $?
+            return 1
         fi
     fi
 
     if [ ! -w "$parent_dir" ]; then
         log_message "No write permission to parent directory $parent_dir"
         debug_info
-        log_message "Attempting to create a temporary virtualenv instead"
-        create_temp_virtualenv
-        return $?
+        return 1
     fi
 
     # Check if VENV_PATH exists (as file, directory, or symlink)
@@ -221,9 +184,7 @@ setup_virtualenv() {
                 if ! mkdir -p "$target_parent" 2>/dev/null; then
                     log_message "Failed to create parent directory for symlink target"
                     debug_info
-                    log_message "Attempting to create a temporary virtualenv instead"
-                    create_temp_virtualenv
-                    return $?
+                    return 1
                 fi
             fi
             
@@ -254,9 +215,7 @@ EOF
                 else
                     log_message "Failed to create virtualenv at symlink target"
                     debug_info
-                    log_message "Attempting to create a temporary virtualenv instead"
-                    create_temp_virtualenv
-                    return $?
+                    return 1
                 fi
             fi
         else
@@ -272,9 +231,7 @@ EOF
                     else
                         log_message "Failed to remove existing directory"
                         debug_info
-                        log_message "Attempting to create a temporary virtualenv instead"
-                        create_temp_virtualenv
-                        return $?
+                        return 1
                     fi
                 fi
             fi
@@ -296,9 +253,7 @@ EOF
             if ! mkdir -p "$PARENT_TARGET" 2>/dev/null; then
                 log_message "Failed to create target parent directory"
                 debug_info
-                log_message "Attempting to create a temporary virtualenv instead"
-                create_temp_virtualenv
-                return $?
+                return 1
             fi
         fi
         
@@ -321,9 +276,7 @@ EOF
         else
             log_message "Failed to create virtualenv at resolved path"
             debug_info
-            log_message "Attempting to create a temporary virtualenv instead"
-            create_temp_virtualenv
-            return $?
+            return 1
         fi
     fi
     
@@ -341,9 +294,7 @@ EOF
     else
         log_message "Failed to create virtualenv with venv module"
         debug_info
-        log_message "Attempting to create a temporary virtualenv instead"
-        create_temp_virtualenv
-        return $?
+        return 1
     fi
 }
 

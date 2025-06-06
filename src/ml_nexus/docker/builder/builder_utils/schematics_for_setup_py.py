@@ -97,12 +97,17 @@ async def macro_install_pyenv_virtualenv_installer(
     if pip_cache_dir == Path("/root/.cache/pip"):
         logger.warning(f"default pip cache dir: /root/.cache/pip is used. This is not going to work unless /root/.cache/pip is removable (Mounting docker volume to this dir won't work. mount the parent dir!)")
     command = f"""
+set -e  # Exit on error
 export PYENV_ROOT={pyenv_root}
 export PYTHON_VERSION={python_version}
 export VENV_NAME={venv_name}
 export VENV_PATH={venv_path}
 export PIP_CACHE_DIR={pip_cache_dir}
 {runnable_path}
+if [ $? -ne 0 ]; then
+    echo "ERROR: Failed to setup pyenv virtualenv"
+    exit 1
+fi
 echo ACTIVATING VENV at {venv_path}
 source {venv_path}/bin/activate
 """
