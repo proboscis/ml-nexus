@@ -3,6 +3,12 @@
 # This script ensures pyenv and a Python virtualenv are properly set up.
 # It returns proper error codes if virtualenv creation fails.
 # No fallback to temporary virtualenv - errors are propagated to the caller.
+#
+# Key features for mounted volume reuse:
+# - Handles git ownership warnings for mounted pyenv directories
+# - Attempts to reuse existing virtualenvs even with permission mismatches
+# - Uses --clear flag to recreate virtualenvs in existing directories
+# - Validates virtualenvs after creation to ensure they're usable
 
 # Default values for environment variables
 : "${PYENV_ROOT:="$HOME/.pyenv"}"
@@ -76,6 +82,12 @@ is_git_repo() {
 init_pyenv_env() {
     export PYENV_ROOT="$PYENV_ROOT"
     export PATH="$PYENV_ROOT/bin:$PATH"
+    
+    # Handle git ownership issues for mounted volumes
+    if [ -d "$PYENV_ROOT/.git" ]; then
+        git config --global --add safe.directory "$PYENV_ROOT" 2>/dev/null || true
+    fi
+    
     if command_exists pyenv; then
         eval "$(pyenv init --path)"
         eval "$(pyenv init -)"
@@ -88,6 +100,12 @@ init_pyenv_env() {
 # Install pyenv if not already installed
 install_pyenv() {
     local pyenv_bin="$PYENV_ROOT/bin/pyenv"
+    
+    # Handle git ownership issues first for any existing pyenv installation
+    if [ -d "$PYENV_ROOT/.git" ]; then
+        log_message "Configuring git to trust pyenv directory"
+        git config --global --add safe.directory "$PYENV_ROOT" 2>/dev/null || true
+    fi
 
     # Check if pyenv binary exists and is executable
     if [ -x "$pyenv_bin" ]; then
@@ -103,6 +121,7 @@ install_pyenv() {
             # Try to initialize it as a git repo and add pyenv remote
             if git init "$PYENV_ROOT" && \
                cd "$PYENV_ROOT" && \
+               git config --global --add safe.directory "$PYENV_ROOT" && \
                git remote add origin "$PYENV_GIT_URL" && \
                git fetch && \
                git reset --hard origin/master; then
@@ -112,10 +131,14 @@ install_pyenv() {
                 log_message "Failed to initialize pyenv repository"
                 return 1
             fi
+        else
+            # Existing git repo - make sure it's trusted
+            git config --global --add safe.directory "$PYENV_ROOT" 2>/dev/null || true
         fi
     else
         log_message "Installing pyenv..."
         git clone "$PYENV_GIT_URL" "$PYENV_ROOT"
+        git config --global --add safe.directory "$PYENV_ROOT" 2>/dev/null || true
     fi
 
     init_pyenv_env
@@ -128,22 +151,34 @@ install_python() {
         return 1
     fi
 
-    if ! pyenv versions | grep -q "$PYTHON_VERSION"; then
+    # Redirect stderr to avoid git warnings that are already handled
+    if ! pyenv versions 2>/dev/null | grep -q "$PYTHON_VERSION"; then
         log_message "Installing Python $PYTHON_VERSION..."
-        pyenv install "$PYTHON_VERSION"
+        pyenv install "$PYTHON_VERSION" 2>&1 | grep -v "detected dubious ownership" || true
     else
         log_message "Python $PYTHON_VERSION already installed"
     fi
-    pyenv global "$PYTHON_VERSION"
+    pyenv global "$PYTHON_VERSION" 2>&1 | grep -v "detected dubious ownership" || true
 }
 
 # Function to verify if a directory is a valid virtualenv
 is_valid_virtualenv() {
     local venv_dir="$1"
     # Check for key virtualenv files/directories
-    [ -f "$venv_dir/bin/activate" ] && \
-    [ -d "$venv_dir/lib" ] && \
-    [ -f "$venv_dir/pyvenv.cfg" ]
+    # Also check if we can actually use it (permission check)
+    if [ -f "$venv_dir/bin/activate" ] && \
+       [ -d "$venv_dir/lib" ] && \
+       [ -f "$venv_dir/pyvenv.cfg" ]; then
+        # Try to read the activate script to verify permissions
+        if [ -r "$venv_dir/bin/activate" ]; then
+            return 0
+        else
+            log_message "Virtualenv exists but lacks read permissions"
+            return 1
+        fi
+    else
+        return 1
+    fi
 }
 
 # Removed temp virtualenv creation - script now returns errors properly
@@ -194,8 +229,15 @@ setup_virtualenv() {
                 return 0
             else
                 log_message "Creating virtualenv at symlink target: $SYMLINK_TARGET"
+                # Use --clear flag if target exists
+                local venv_flags=""
+                if [ -d "$SYMLINK_TARGET" ]; then
+                    venv_flags="--clear"
+                    log_message "Target directory exists, using --clear flag"
+                fi
+                
                 # Create virtualenv at the symlink target
-                if python -m venv "$SYMLINK_TARGET"; then
+                if python -m venv $venv_flags "$SYMLINK_TARGET"; then
                     log_message "Successfully created virtualenv at symlink target"
                     
                     # Verify symlink still points correctly
@@ -205,13 +247,20 @@ setup_virtualenv() {
                         return 1
                     fi
                     
-                    # Generate activation script
-                    cat > activate_venv.sh << EOF
+                    # Verify the virtualenv is valid
+                    if is_valid_virtualenv "$SYMLINK_TARGET"; then
+                        log_message "Virtualenv validation successful"
+                        # Generate activation script
+                        cat > activate_venv.sh << EOF
 #!/bin/bash
 source "$VENV_PATH/bin/activate"
 EOF
-                    chmod +x activate_venv.sh
-                    return 0
+                        chmod +x activate_venv.sh
+                        return 0
+                    else
+                        log_message "Created virtualenv but validation failed"
+                        return 1
+                    fi
                 else
                     log_message "Failed to create virtualenv at symlink target"
                     debug_info
@@ -225,13 +274,20 @@ EOF
                     log_message "Valid virtualenv already exists at $VENV_PATH"
                     return 0
                 else
-                    log_message "Directory exists but is not a valid virtualenv. Removing $VENV_PATH"
-                    if rm -rf "$VENV_PATH" 2>/dev/null; then
-                        log_message "Successfully removed existing directory"
+                    log_message "Directory exists but is not a valid virtualenv at $VENV_PATH"
+                    # Check if directory is empty or nearly empty
+                    local file_count=$(find "$VENV_PATH" -type f 2>/dev/null | wc -l)
+                    if [ "$file_count" -le 1 ]; then
+                        log_message "Directory is empty or nearly empty, will try to create virtualenv in it"
                     else
-                        log_message "Failed to remove existing directory"
-                        debug_info
-                        return 1
+                        log_message "Directory contains $file_count files, attempting removal"
+                        if rm -rf "$VENV_PATH" 2>/dev/null; then
+                            log_message "Successfully removed existing directory"
+                        else
+                            log_message "Failed to remove existing directory due to permissions"
+                            # Try to create virtualenv anyway - it might work
+                            log_message "Will attempt to create virtualenv despite existing directory"
+                        fi
                     fi
                 fi
             fi
@@ -257,7 +313,14 @@ EOF
             fi
         fi
         
-        if python -m venv "$TARGET_PATH"; then
+        # Use --clear flag if target exists
+        local venv_flags=""
+        if [ -d "$TARGET_PATH" ]; then
+            venv_flags="--clear"
+            log_message "Target directory exists, using --clear flag"
+        fi
+        
+        if python -m venv $venv_flags "$TARGET_PATH"; then
             log_message "Successfully created virtualenv at target path"
             
             # Create the final symlink if needed
@@ -266,13 +329,20 @@ EOF
                 log_message "Created symlink: $VENV_PATH -> $TARGET_PATH"
             fi
             
-            # Generate activation script
-            cat > activate_venv.sh << EOF
+            # Verify the virtualenv is valid
+            if is_valid_virtualenv "$TARGET_PATH"; then
+                log_message "Virtualenv validation successful"
+                # Generate activation script
+                cat > activate_venv.sh << EOF
 #!/bin/bash
 source "$VENV_PATH/bin/activate"
 EOF
-            chmod +x activate_venv.sh
-            return 0
+                chmod +x activate_venv.sh
+                return 0
+            else
+                log_message "Created virtualenv but validation failed"
+                return 1
+            fi
         else
             log_message "Failed to create virtualenv at resolved path"
             debug_info
@@ -282,15 +352,30 @@ EOF
     
     # Normal creation - no symlinks involved
     log_message "Creating virtualenv at $VENV_PATH using venv module..."
-    if python -m venv "$VENV_PATH"; then
+    # Try with --clear flag if directory exists to handle permission issues
+    local venv_flags=""
+    if [ -d "$VENV_PATH" ]; then
+        venv_flags="--clear"
+        log_message "Directory exists, using --clear flag for venv creation"
+    fi
+    
+    if python -m venv $venv_flags "$VENV_PATH"; then
         log_message "Successfully created virtualenv at $VENV_PATH"
-        # Generate activation script
-        cat > activate_venv.sh << EOF
+        # Verify the virtualenv is valid
+        if is_valid_virtualenv "$VENV_PATH"; then
+            log_message "Virtualenv validation successful"
+            # Generate activation script
+            cat > activate_venv.sh << EOF
 #!/bin/bash
 source "$VENV_PATH/bin/activate"
 EOF
-        chmod +x activate_venv.sh
-        return 0
+            chmod +x activate_venv.sh
+            return 0
+        else
+            log_message "Created virtualenv but validation failed"
+            debug_info
+            return 1
+        fi
     else
         log_message "Failed to create virtualenv with venv module"
         debug_info
@@ -301,6 +386,12 @@ EOF
 # Main execution
 main() {
     log_message "Starting Python environment setup..."
+    
+    # Set git safe directory early to prevent ownership warnings
+    if [ -d "$PYENV_ROOT/.git" ]; then
+        log_message "Pre-configuring git to trust pyenv directory"
+        git config --global --add safe.directory "$PYENV_ROOT" 2>/dev/null || true
+    fi
 
     if ! install_pyenv; then
         log_message "Failed to set up pyenv"
