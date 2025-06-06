@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Multi-stage Docker build support for embedded dependencies**
+  - Added `a_uv_component_embedded` for UV projects with optimized dependency caching
+  - Added `a_component_to_install_requirements_txt_embedded` for requirements.txt projects
+  - Added `a_pyenv_component_embedded` for pyenv-based projects with layer optimization
+  - All embedded components use Docker BuildKit cache mounts for package managers
+  - Dependency installation happens in separate layer before source code copy
+  - Significantly improves Docker build times when source code changes but dependencies don't
+- **Support for 'auto-embed' project kind**
+  - Automatically detects project type (UV, requirements.txt) and uses embedded dependencies
+  - Falls back to regular handling for unsupported project types
+- **Support for 'pyvenv-embed' project kind**
+  - Added to ProjectDir literal types for explicit pyenv embedding
+  - Integrated with env_identification and schematics_universal
+  - Supports both requirements.txt and setup.py based projects
+- **Comprehensive test coverage for embedded components**
+  - Test IProxy definitions for UV auto-embed projects
+  - Test IProxy definitions for requirements.txt auto-embed projects  
+  - Test IProxy definitions for pyvenv-embed with both requirements.txt and setup.py
+
 ### Fixed
 - Fixed critical symlink destruction issue in `ensure_pyenv_virtualenv.sh`
   - Script was destroying symlinks created by MLPlatform, causing virtualenvs to be stored on limited job volume

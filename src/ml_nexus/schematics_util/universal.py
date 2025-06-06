@@ -100,6 +100,14 @@ async def a_pyenv_component_embedded(
     """
     Pyenv component with embedded dependencies using multi-stage Docker build.
     This optimizes build caching by separating dependency installation from source code.
+    
+    Docker layer structure:
+    1. Layer 1: Set up pyenv/virtualenv (venv_setup.macro)
+    2. Layer 2: Copy ONLY requirements.txt and install dependencies (if exists)
+    3. Layer 3: Copy all source code
+    4. Layer 4: Install package with setup.py (if exists)
+    
+    This ensures that dependency installation is cached separately from source code changes.
     """
     target_id = target.dirs[0].id
     local_project_dir = await storage_resolver.locate(target.dirs[0].id)
@@ -590,7 +598,6 @@ async def schematics_universal(
 ):
     base_image = base_image or ml_nexus_default_base_image
     python_version = python_version or ml_nexus_default_python_version
-    local_root_dir = await storage_resolver.locate(target.dirs[0].id)
     setup_script_with_deps: SetupScriptWithDeps = await a_prepare_setup_script_with_deps(target)
     python_components = []
     for dep in setup_script_with_deps.env_deps:
