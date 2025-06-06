@@ -12,9 +12,10 @@ from pinjected import *
 from ml_nexus import load_env_design
 from ml_nexus.docker.builder.builder_utils.rye_util import get_dummy_rye_venv
 from ml_nexus.docker.builder.docker_env_with_schematics import DockerEnvFromSchematics
-from ml_nexus.docker.builder.macros.macro_defs import Macro
+from ml_nexus.docker.builder.macros.macro_defs import Macro, RCopy
 from ml_nexus.docker.builder.persistent import PersistentDockerEnvFromSchematics
 from ml_nexus.project_structure import ProjectDef, ProjectDir
+from ml_nexus.rsync_util import RsyncArgs
 from ml_nexus.schematics import MountRequest, CacheMountRequest, ContainerSchematic
 from ml_nexus.schematics_util.env_identification import SetupScriptWithDeps
 from ml_nexus.storage_resolver import IStorageResolver
@@ -54,7 +55,10 @@ async def base_apt_packages_component():
     return EnvComponent(
         installation_macro=[
             "ENV DEBIAN_FRONTEND=noninteractive",
-            "RUN apt-get update && apt-get install -y python3-pip python3-dev build-essential libssl-dev curl git clang rsync",
+            # Install all dependencies required by pyenv to build Python from source
+            "RUN apt-get update && apt-get install -y python3-pip python3-dev build-essential libssl-dev curl git clang rsync \
+                zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev wget llvm libncurses5-dev libncursesw5-dev \
+                xz-utils tk-dev libffi-dev liblzma-dev python3-openssl",
         ],
     )
 

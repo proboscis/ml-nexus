@@ -10,6 +10,8 @@
 # - Tests virtualenv usability by actually activating and running Python
 # - Uses --clear flag to recreate virtualenvs only when necessary
 # - Designed to work with Docker cache mounts that persist across runs
+#
+# Version: 2025-06-06-v2 (cache bust)
 
 # Default values for environment variables
 : "${PYENV_ROOT:="$HOME/.pyenv"}"
@@ -450,7 +452,7 @@ EOF
 
 # Main execution
 main() {
-    log_message "Starting Python environment setup..."
+    log_message "Starting Python environment setup (Version: 2025-06-06-v2)..."
     
     # Ensure python command exists early (for systems with only python3)
     ensure_python_command
