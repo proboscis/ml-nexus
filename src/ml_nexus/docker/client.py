@@ -1,5 +1,4 @@
 import asyncio
-import base64
 import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -159,37 +158,52 @@ class LocalDockerClient(DockerClient):
     """
     _a_system: callable
     _logger: Any
+    _ml_nexus_docker_build_context: str
+
+    def _get_docker_cmd(self) -> str:
+        """Get docker command with context if specified"""
+        if self._ml_nexus_docker_build_context:
+            return f"docker --context {self._ml_nexus_docker_build_context}"
+        return "docker"
 
     async def run_container(self, image: str, command: str, options: List[str] = None) -> str:
+        docker_cmd = self._get_docker_cmd()
         options_str = " ".join(options) if options else ""
-        cmd = f"docker run {options_str} {image} {command}"
+        cmd = f"{docker_cmd} run {options_str} {image} {command}"
         return await self._a_system(cmd)
 
     async def exec_container(self, container: str, command: str) -> str:
-        cmd = f"docker exec {container} {command}"
+        docker_cmd = self._get_docker_cmd()
+        cmd = f"{docker_cmd} exec {container} {command}"
         return await self._a_system(cmd)
 
     async def build_image(self, context_dir: Path, tag: str, options: List[str] = None) -> str:
+        docker_cmd = self._get_docker_cmd()
         options_str = " ".join(options) if options else ""
-        cmd = f"docker build {options_str} -t {tag} {context_dir}"
+        cmd = f"{docker_cmd} build {options_str} -t {tag} {context_dir}"
         await self._a_system(cmd)
         return tag
 
     async def push_image(self, tag: str) -> None:
-        await self._a_system(f"docker push {tag}")
+        docker_cmd = self._get_docker_cmd()
+        await self._a_system(f"{docker_cmd} push {tag}")
 
     async def copy_to_container(self, src: Path, container: str, dst: Path) -> None:
-        await self._a_system(f"docker cp {src} {container}:{dst}")
+        docker_cmd = self._get_docker_cmd()
+        await self._a_system(f"{docker_cmd} cp {src} {container}:{dst}")
 
     async def copy_from_container(self, container: str, src: Path, dst: Path) -> None:
-        await self._a_system(f"docker cp {container}:{src} {dst}")
+        docker_cmd = self._get_docker_cmd()
+        await self._a_system(f"{docker_cmd} cp {container}:{src} {dst}")
 
     async def stop_container(self, container: str) -> None:
-        await self._a_system(f"docker stop {container}")
+        docker_cmd = self._get_docker_cmd()
+        await self._a_system(f"{docker_cmd} stop {container}")
 
     async def list_containers(self) -> Dict[str, Any]:
+        docker_cmd = self._get_docker_cmd()
         ps = await asyncio.subprocess.create_subprocess_shell(
-            "docker ps -a --format '{{json .}}'",
+            f"{docker_cmd} ps -a --format '{{json .}}'",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
@@ -292,7 +306,8 @@ class RemoteDockerClient(DockerClient):
 
 @instance
 def ml_nexus_default_docker_client(
-    a_system,
+    new_LocalDockerClient,
+    new_RemoteDockerClient,
     logger,
     ml_nexus_docker_host: Optional[str] = None
 ) -> DockerClient:
@@ -306,11 +321,9 @@ def ml_nexus_default_docker_client(
         DockerClient実装
     """
     if ml_nexus_docker_host is None or ml_nexus_docker_host == "localhost" or ml_nexus_docker_host == "127.0.0.1":
-        return LocalDockerClient(_a_system=a_system, _logger=logger)
+        return new_LocalDockerClient()
     else:
-        return RemoteDockerClient(_a_system=a_system, _logger=logger, host=ml_nexus_docker_host)
+        # For remote Docker, context is not applicable as commands are executed via SSH
+        return new_RemoteDockerClient(host=ml_nexus_docker_host)
 
 
-# テスト用のIProxy
-test_local_docker_client: Any = injected(ml_nexus_default_docker_client)(ml_nexus_docker_host=None)
-test_remote_docker_client: Any = injected(ml_nexus_default_docker_client)(ml_nexus_docker_host="example.com")

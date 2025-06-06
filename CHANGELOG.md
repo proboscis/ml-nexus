@@ -15,6 +15,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Best practices and troubleshooting guide
   - Examples using actual patterns from the codebase and configuration files
 - `test/PYTEST_CONVERSION_PLAN.md` - Test conversion planning documentation
+- `doc/schematics_universal_philosophy_and_usage.md` - Comprehensive documentation for schematics_universal
+  - Philosophy behind unified interface for Docker container configurations
+  - Architecture overview with component system and project types
+  - Usage patterns and examples for different Python project structures
+  - Integration with pinjected framework using IProxy
+  - Best practices for creating custom components
+- Docker context support for all Docker operations
+  - Added `ml_nexus_docker_build_context` configuration to specify Docker daemon context
+  - Supports named contexts like 'zeus', 'default', 'colima' for different Docker environments
+  - Environment variable `ML_NEXUS_DOCKER_BUILD_CONTEXT` for global configuration
 
 ### Changed
 - Updated Pinjected usage to follow latest best practices (v0.2.115+)
@@ -44,6 +54,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Updated all test files that were asserting against the PsResult object directly
   - Changed assertions from `assert "text" in result` to `assert "text" in result.stdout`
   - Ensures proper handling of script execution results in tests
+- Enhanced Docker client implementation to support context configuration
+  - Updated `LocalDockerClient` to accept `_ml_nexus_docker_build_context` as injected dependency
+  - All Docker commands now properly use `--context` flag when context is specified
+  - Modified Docker build functions (`a_build_docker`, `build_image_with_copy`, `build_image_with_rsync`)
+  - Updated `a_docker_push__local` to use Docker context for push operations
+  - Added constructor injections for `LocalDockerClient` and `RemoteDockerClient`
+  - Removed Optional type for injected dependencies following pinjected conventions
+
+### Fixed
+- Docker operations now consistently use the configured Docker context
+  - Fixed issue where only build commands were using context, not other operations
+  - Ensured push, exec, run, and other Docker commands respect the context setting
+  - Added comprehensive test coverage for Docker context usage
 
 ### Deprecated
 - `__meta_design__` - Use `__design__` instead in `__pinjected__.py` files

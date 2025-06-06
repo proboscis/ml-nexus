@@ -1,10 +1,5 @@
-import os
-from pathlib import Path
-
-from pinjected import *
+from pinjected import instance, injected, design
 from returns.future import future
-
-from ml_nexus.util import a_system
 
 
 @instance
@@ -15,7 +10,7 @@ async def f_install_gcloud_command(a_system):
     """
     try:
         a_system('gcloud --version')
-    except Exception as e:
+    except Exception:
         await a_system("curl -sSL https://sdk.cloud.google.com | bash")
 
 
@@ -63,11 +58,18 @@ async def a_setup_docker_credentials__gcp(
 
 
 @injected
-async def a_docker_push__local(a_system, a_setup_docker_credentials, /, tag):
+async def a_docker_push__local(a_system, a_setup_docker_credentials, ml_nexus_docker_build_context, logger, /, tag):
     """
+    Push docker image to registry with optional docker context
     """
     await a_setup_docker_credentials(tag)
-    await a_system(f"docker push {tag}")
+    
+    docker_cmd = "docker"
+    if ml_nexus_docker_build_context:
+        logger.info(f"Using Docker context for push: {ml_nexus_docker_build_context}")
+        docker_cmd = f"docker --context {ml_nexus_docker_build_context}"
+    
+    await a_system(f"{docker_cmd} push {tag}")
 
 
 __meta_design__ = design()

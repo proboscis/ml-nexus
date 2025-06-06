@@ -1,8 +1,7 @@
 from pathlib import Path
 from typing import Any
 
-from pinjected import *
-from pinjected import instance
+from pinjected import instance, injected, design, IProxy
 
 from ml_nexus.storage_resolver import IdPath
 
@@ -54,7 +53,7 @@ def local_storage_resolver_from_env(
     logger = ml_nexus_logger
     logger.info(
         f"Creating local storage resolver with source_root: {ml_nexus_source_root}, resource_root: {ml_nexus_resource_root}")
-    logger.info(f"You can override storage resolver by setting 'storage_resolver' in __meta_design__")
+    logger.info("You can override storage resolver by setting 'storage_resolver' in __meta_design__")
     from ml_nexus.storage_resolver import DirectoryStorageResolver
     return DirectoryStorageResolver(ml_nexus_source_root) + DirectoryStorageResolver(ml_nexus_resource_root)
 
@@ -115,7 +114,7 @@ def ml_nexus_get_env_path(ml_nexus_logger, /, key: str, default: Path | str) -> 
 #     )
 
 @instance
-def ml_nexus_github_credential_component__pat(github_access_token) -> "EnvComponent":
+def ml_nexus_github_credential_component__pat(github_access_token):
     """
     This is used by a_uv_component. but not yet by the rye component
     """
@@ -132,23 +131,17 @@ chmod 600 ~/.git-credentials"""
     )
 @instance
 def __load_default_design():
-    from ml_nexus.util import a_system_parallel, a_system_sequential
+    from ml_nexus.util import a_system_parallel
 
     from ml_nexus.docker.builder.docker_builder import DockerBuilder
-    from ml_nexus.project_structure import ProjectDef
-    from ml_nexus.project_structure import ProjectDir
 
     from ml_nexus.docker_env import DockerHostEnvironment
     from ml_nexus.docker.builder.builder_utils.building import build_image_with_copy
     from ml_nexus.docker.builder.builder_utils.patch_rye import patch_rye_project
     from ml_nexus.docker.builder.builder_utils.patch_uv import patch_uv_dir
     from ml_nexus.docker.builder.builder_utils.rye_util import macro_preinstall_from_requirements_with_rye__v2
-    from ml_nexus.util import a_system_sequential
     from ml_nexus.docker.builder.builder_utils.common import gather_rsync_macros_project_def
     from ml_nexus.docker.builder.macros.base64_runner import macro_install_base64_runner
-    from ml_nexus.docker.builder.builder_utils.building import a_build_docker_no_buildkit
-
-    from ml_nexus.storage_resolver import local_storage_resolver
     from ml_nexus.rsync_util import RsyncArgs
     from ml_nexus.docker_env import DockerHostMounter
     from ml_nexus.docker.builder.builder_utils.docker_for_rye import build_entrypoint_script, \
@@ -158,6 +151,7 @@ def __load_default_design():
     from pinjected_openai.vision_llm import a_cached_vision_llm__gpt4o
     from ml_nexus.docker.builder.builder_utils.schematics_for_setup_py import macro_install_pyenv_virtualenv_installer
     from ml_nexus.docker.builder.builder_utils.building import a_build_docker
+    from ml_nexus.docker.client import LocalDockerClient, RemoteDockerClient
     default_design = design(
         env_result_download_path=Path("results").expanduser(),
         # a_system=a_system_sequential,
@@ -174,6 +168,8 @@ def __load_default_design():
         new_DockerHostMounter=injected(DockerHostMounter),
         new_DockerBuilder=injected(DockerBuilder),
         new_RsyncArgs=injected(RsyncArgs),
+        new_LocalDockerClient=injected(LocalDockerClient),
+        new_RemoteDockerClient=injected(RemoteDockerClient),
 
         ml_nexus_debug_docker_build=True,
         # Docker build context configuration (e.g., 'zeus', 'default', 'colima')

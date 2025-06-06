@@ -11,9 +11,9 @@ from tempfile import TemporaryDirectory
 from typing import Union
 
 from loguru import logger
-from pinjected import *
+from pinjected import injected, instance, design
 from pinjected.compatibility.task_group import TaskGroup
-from returns.future import future, Future
+from returns.future import Future
 
 from ml_nexus import load_env_design
 from ml_nexus.assertions import is_async_context_manager
@@ -27,6 +27,8 @@ from ml_nexus.util import PsResult
 @injected
 async def build_image_with_copy(
         a_system,
+        ml_nexus_docker_build_context,
+        logger,
         /,
         from_image,
         pre_copy_commands,
@@ -59,9 +61,15 @@ FROM {from_image}
             await a_system(
                 f"rsync -avH --progress --link-dest={src.expanduser()} {src.expanduser()}/ {tmpdir / path_hash(dst)}/")
 
-        await a_system(f"docker build -t {tag} {tmpdir}")
+        # Build docker command with context if specified
+        docker_cmd = "docker"
+        if ml_nexus_docker_build_context:
+            logger.info(f"Using Docker context: {ml_nexus_docker_build_context}")
+            docker_cmd = f"docker --context {ml_nexus_docker_build_context}"
+
+        await a_system(f"{docker_cmd} build -t {tag} {tmpdir}")
         if push:
-            await a_system(f"docker push {tag}")
+            await a_system(f"{docker_cmd} push {tag}")
         return tag
 
 
@@ -107,6 +115,7 @@ def log_large_files(directory, size_threshold_mb):
 async def build_image_with_rsync(
         a_system,
         logger,
+        ml_nexus_docker_build_context,
         /,
         code,
         tag,
@@ -155,10 +164,16 @@ async def build_image_with_rsync(
         log_large_files(tmpdir, 10)
         # can we do things like ncdu?
 
-        await a_system(f"docker build -t {tag} {tmpdir}")
-        await a_system(f"docker history {tag}")
+        # Build docker command with context if specified
+        docker_cmd = "docker"
+        if ml_nexus_docker_build_context:
+            logger.info(f"Using Docker context: {ml_nexus_docker_build_context}")
+            docker_cmd = f"docker --context {ml_nexus_docker_build_context}"
+
+        await a_system(f"{docker_cmd} build -t {tag} {tmpdir}")
+        await a_system(f"{docker_cmd} history {tag}")
         if push:
-            await a_system(f"docker push {tag}")
+            await a_system(f"{docker_cmd} push {tag}")
         return tag
 
 
@@ -354,7 +369,7 @@ async def prepare_build_context_with_macro(
 
                 new_docker_file = await parse(code)
 
-            docker_file_hash = md5(new_docker_file.encode()).hexdigest()
+            # docker_file_hash = md5(new_docker_file.encode()).hexdigest()
             dockerfile_path = tmpdir / "Dockerfile"
             dockerfile_path.write_text(new_docker_file)
 
