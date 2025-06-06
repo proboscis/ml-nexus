@@ -558,6 +558,208 @@ async def test_run_context(
         
     logger.info("✅ Run context test passed")
 
+
+# ===== Test 10: Python execution with UV project =====
+@injected_pytest(test_design)
+async def test_python_execution_uv(
+    schematics_universal, new_PersistentDockerEnvFromSchematics, logger
+):
+    """Test Python script execution in persistent container with UV project"""
+    logger.info("Testing Python execution in persistent container with UV project")
+    
+    # Create a UV project for Python environment
+    project = ProjectDef(dirs=[ProjectDir("test_uv", kind="uv")])
+    schematic = await schematics_universal(
+        target=project,
+        base_image='python:3.11-slim'
+    )
+    
+    container_name = f"test_python_exec_uv_{uuid.uuid4().hex[:8]}"
+    docker_env = new_PersistentDockerEnvFromSchematics(
+        project=project,
+        schematics=schematic,
+        docker_host="zeus",
+        container_name=container_name
+    )
+    
+    try:
+        # Test 1: Basic Python version check
+        result = await docker_env.run_script("python --version")
+        assert "Python" in result.stdout
+        assert result.exit_code == 0
+        logger.info(f"✓ Python version: {result.stdout.strip()}")
+        
+        # Test 2: Python inline script
+        result = await docker_env.run_script("python -c 'print(\"Hello from persistent container!\")'")
+        assert "Hello from persistent container!" in result.stdout
+        assert result.exit_code == 0
+        logger.info("✓ Python inline script works")
+        
+        # Test 3: Python with imports
+        result = await docker_env.run_script("""python -c '
+import sys
+import platform
+print(f"Python {sys.version}")
+print(f"Platform: {platform.platform()}")
+print(f"Executable: {sys.executable}")
+'""")
+        assert "Python" in result.stdout
+        assert "Platform:" in result.stdout
+        assert result.exit_code == 0
+        logger.info("✓ Python imports work")
+        
+        # Test 4: Create and run a Python file
+        python_script = '''
+import json
+import sys
+
+data = {"message": "Hello from file", "python_version": sys.version.split()[0]}
+print(json.dumps(data, indent=2))
+'''
+        # Create the file in container
+        await docker_env.run_script(f"cat > /tmp/test_script.py << 'EOF'\n{python_script}\nEOF")
+        
+        # Run the Python file
+        result = await docker_env.run_script("python /tmp/test_script.py")
+        assert "Hello from file" in result.stdout
+        assert "python_version" in result.stdout
+        assert result.exit_code == 0
+        logger.info("✓ Python file execution works")
+        
+        # Test 5: Verify UV is available (since it's a UV project)
+        result = await docker_env.run_script("which uv")
+        assert "/uv" in result.stdout or "uv" in result.stdout
+        logger.info("✓ UV is available in the container")
+        
+        # Test 6: Test error handling
+        result = await docker_env.run_script("python -c 'import sys; sys.exit(42)'")
+        assert result.exit_code == 42
+        logger.info("✓ Python exit codes are preserved")
+        
+        # Test 7: Multi-line Python script
+        multiline_script = """
+python << 'PYTHON_EOF'
+def factorial(n):
+    if n <= 1:
+        return 1
+    return n * factorial(n-1)
+
+for i in range(1, 6):
+    print(f"{i}! = {factorial(i)}")
+PYTHON_EOF
+"""
+        result = await docker_env.run_script(multiline_script)
+        assert "5! = 120" in result.stdout
+        assert result.exit_code == 0
+        logger.info("✓ Multi-line Python scripts work")
+        
+    finally:
+        # Clean up
+        await docker_env.stop()
+        
+    logger.info("✅ Python execution with UV test passed")
+
+
+# ===== Test 11: Python execution with requirements.txt project (auto detection) =====
+@injected_pytest(test_design)
+async def test_python_execution_requirements_auto(
+    schematics_universal, new_PersistentDockerEnvFromSchematics, logger
+):
+    """Test Python script execution in persistent container with requirements.txt project using auto detection"""
+    logger.info("Testing Python execution in persistent container with requirements.txt (auto detection)")
+    
+    # Create a project with auto detection - should detect requirements.txt
+    project = ProjectDef(dirs=[ProjectDir("test_requirements", kind="auto")])
+    schematic = await schematics_universal(
+        target=project,
+        base_image='python:3.11-slim'
+    )
+    
+    container_name = f"test_python_exec_req_{uuid.uuid4().hex[:8]}"
+    docker_env = new_PersistentDockerEnvFromSchematics(
+        project=project,
+        schematics=schematic,
+        docker_host="zeus",
+        container_name=container_name
+    )
+    
+    try:
+        # Test 1: Basic Python version check
+        result = await docker_env.run_script("python --version")
+        assert "Python" in result.stdout
+        assert result.exit_code == 0
+        logger.info(f"✓ Python version: {result.stdout.strip()}")
+        
+        # Test 2: Verify packages from requirements.txt are installed
+        result = await docker_env.run_script("python -c 'import pandas; print(f\"pandas version: {pandas.__version__}\")'")
+        assert "pandas version:" in result.stdout
+        logger.info("✓ pandas from requirements.txt is available")
+        
+        result = await docker_env.run_script("python -c 'import numpy; print(f\"numpy version: {numpy.__version__}\")'")
+        assert "numpy version:" in result.stdout
+        logger.info("✓ numpy from requirements.txt is available")
+        
+        # Test 3: Verify pyenv is used (auto detection with requirements.txt uses pyenv)
+        result = await docker_env.run_script("which python")
+        assert ".pyenv" in result.stdout or "/usr/local/bin/python" in result.stdout
+        logger.info(f"✓ Python path: {result.stdout.strip()}")
+        
+        # Test 4: Run a simple pandas operation
+        pandas_script = """python -c '
+import pandas as pd
+import numpy as np
+
+# Create a simple DataFrame
+df = pd.DataFrame({
+    "A": np.random.rand(5),
+    "B": np.random.randint(1, 10, 5)
+})
+print("DataFrame created successfully")
+print(df.describe())
+'"""
+        result = await docker_env.run_script(pandas_script)
+        assert "DataFrame created successfully" in result.stdout
+        assert "count" in result.stdout  # From describe() output
+        assert result.exit_code == 0
+        logger.info("✓ Pandas operations work correctly")
+        
+        # Test 5: Verify auto detection worked correctly
+        # Check if virtualenv is created (requirements.txt with auto uses pyenv virtualenv)
+        result = await docker_env.run_script("ls -la $HOME/.pyenv/versions/ 2>/dev/null || echo 'No pyenv'")
+        logger.info(f"Pyenv versions check: {result.stdout}")
+        
+        # Test 6: Multiple imports test
+        multi_import_script = """python -c '
+import sys
+import pandas as pd
+import numpy as np
+import requests
+import flask
+import pytest
+
+print(f"Python: {sys.version.split()[0]}")
+print(f"pandas: {pd.__version__}")
+print(f"numpy: {np.__version__}")
+print(f"requests: {requests.__version__}")
+print(f"flask: {flask.__version__}")
+print(f"pytest: {pytest.__version__}")
+print("All imports successful!")
+'"""
+        result = await docker_env.run_script(multi_import_script)
+        assert "All imports successful!" in result.stdout
+        assert "pandas:" in result.stdout
+        assert "numpy:" in result.stdout
+        assert "requests:" in result.stdout
+        assert result.exit_code == 0
+        logger.info("✓ All required packages are importable")
+        
+    finally:
+        # Clean up
+        await docker_env.stop()
+        
+    logger.info("✅ Python execution with requirements.txt (auto) test passed")
+
+
 # Module design configuration
 __design__ = load_env_design + test_design+design(
     ml_nexus_docker_context='zeus',

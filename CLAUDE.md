@@ -218,3 +218,5 @@ This applies to the case where a commit failed due to linter issues.
 # Coding Style:
 - Respect SOLID principles.
 - Respect linter rules for complexity and readability analysis. THIS IS CRITICAL.
+
+- tests around docker takes a minute so running them all at once will timeout in your shell. run each docker related test one by one in such case
