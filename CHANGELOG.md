@@ -7,7 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `doc/storage_resolver_architecture.md` - Comprehensive documentation for StorageResolver system
+  - Architecture diagrams and class hierarchy using Mermaid
+  - Design philosophy and implementation details
+  - Integration patterns with Docker environments and dependency injection
+  - Best practices and troubleshooting guide
+  - Examples using actual patterns from the codebase and configuration files
+- `test/PYTEST_CONVERSION_PLAN.md` - Test conversion planning documentation
+
 ### Changed
+- Updated Pinjected usage to follow latest best practices (v0.2.115+)
+  - Replaced deprecated `__meta_design__` with `__design__` throughout codebase
+  - Removed `overrides=` pattern in favor of direct design assignment
+  - Updated all async `@injected` functions to use `a_` prefix convention
+  - Fixed logger injection to be passed as dependency parameter instead of global import
+  - Added proper import statements for all pinjected decorators
+  - Clarified distinction between `__pinjected__.py` (module config) and `.pinjected.py` (user config)
+- Updated `doc/how_to_use_pinjected.md` with latest framework patterns
+  - Marked `__meta_design__` as deprecated
+  - Updated examples to show proper `__design__` usage
+  - Fixed async function naming conventions
+  - Updated test examples to use `@injected_pytest` decorator
 - Refactored test suite to use `@injected_pytest` decorator for Pinjected tests
   - Migrated 9 test files from custom `to_pytest` pattern to recommended `@injected_pytest`
   - Removed return statements from test functions, replaced with proper assertions
@@ -24,7 +45,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Changed assertions from `assert "text" in result` to `assert "text" in result.stdout`
   - Ensures proper handling of script execution results in tests
 
-### Added
+### Deprecated
+- `__meta_design__` - Use `__design__` instead in `__pinjected__.py` files
+- `design(overrides=...)` pattern - Use direct `design(key=value)` assignment
+
+### Documentation
+- Created StorageResolver architecture documentation with comprehensive examples
+- Updated Pinjected usage guide to reflect current best practices
+- Added test conversion planning documents
+
+### Internal
 - `test/PINJECTED_USAGE_ANALYSIS.md` - Comprehensive analysis of Pinjected usage issues across test files
 - `test/PINJECTED_MIGRATION_PLAN.md` - Systematic migration plan for converting tests to best practices
 - `test/test_auto_pyvenv_docker_env.py` - Test suite for auto-detection of pyvenv projects

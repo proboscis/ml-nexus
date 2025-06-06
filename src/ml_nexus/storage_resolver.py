@@ -155,6 +155,6 @@ async def IdPath(storage_resolver: IStorageResolver, /, id: str) -> Path:
     return await storage_resolver.locate(id)
 
 
-__meta_design__ = instances(
+__design__ = instances(
 
 )

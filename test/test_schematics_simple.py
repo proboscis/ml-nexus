@@ -1,10 +1,10 @@
-"""Simple test for schematics_universal with different ProjectDir kinds"""
+"""Test schematics_universal with different ProjectDir kinds using @injected_pytest"""
 
 from pathlib import Path
-from pinjected import *
+from pinjected import design
+from pinjected.test import injected_pytest
 from ml_nexus import load_env_design
 from ml_nexus.project_structure import ProjectDef, ProjectDir
-from ml_nexus.schematics_util.universal import schematics_universal
 from ml_nexus.storage_resolver import StaticStorageResolver
 from loguru import logger
 
@@ -20,86 +20,143 @@ test_storage_resolver = StaticStorageResolver({
     "test_resource": TEST_PROJECT_ROOT / "test_resource",
 })
 
-# Simple function to print basic info about a schematic
-@injected
-async def a_print_schematic_info(
-    schematics_universal,
-    /,
-    project_id: str,
-    kind: str,
-    expected_kind: str
-):
-    """Print basic info about a schematic"""
+# Test design configuration
+test_design = design(
+    storage_resolver=test_storage_resolver,
+    logger=logger
+)
+
+# Module design configuration
+__meta_design__ = design(
+    overrides=load_env_design + test_design
+)
+
+# Test UV project
+@injected_pytest(test_design)
+async def test_uv_project(schematics_universal, logger):
+    """Test UV project configuration"""
     logger.info(f"\n{'='*60}")
-    logger.info(f"Testing {expected_kind} kind with project: {project_id}")
+    logger.info("Testing UV kind with project: test_uv")
     logger.info(f"{'='*60}")
     
-    project = ProjectDef(dirs=[ProjectDir(project_id, kind=kind)])
+    project = ProjectDef(dirs=[ProjectDir("test_uv", kind="uv")])
     schematic = await schematics_universal(
         target=project,
-        base_image='python:3.11-slim' if kind != 'source' else 'ubuntu:22.04'
+        base_image='python:3.11-slim'
     )
     
     builder = schematic.builder
     logger.info(f"Base image: {builder.base_image}")
     logger.info(f"Macros count: {len(builder.macros)}")
     logger.info(f"Scripts count: {len(builder.scripts)}")
-    logger.info(f"Mount requests: {len(schematic.mount_requests)}")
     
-    # Show first few scripts
-    logger.info("\nFirst few scripts:")
-    for i, script in enumerate(builder.scripts[:3]):
-        logger.info(f"  Script {i}: {script[:60]}...")
+    # Verify UV-specific configuration
+    scripts_str = ' '.join(builder.scripts)
+    assert 'uv sync' in scripts_str, "UV sync command not found"
+    assert builder.base_image == 'python:3.11-slim'
+
+
+# Test Rye project
+@injected_pytest(test_design)
+async def test_rye_project(schematics_universal, logger):
+    """Test Rye project configuration"""
+    logger.info(f"\n{'='*60}")
+    logger.info("Testing RYE kind with project: test_rye")
+    logger.info(f"{'='*60}")
     
-    return f"Tested {expected_kind} successfully"
+    project = ProjectDef(dirs=[ProjectDir("test_rye", kind="rye")])
+    schematic = await schematics_universal(
+        target=project,
+        base_image='python:3.11-slim'
+    )
+    
+    builder = schematic.builder
+    logger.info(f"Base image: {builder.base_image}")
+    logger.info(f"Macros count: {len(builder.macros)}")
+    logger.info(f"Scripts count: {len(builder.scripts)}")
+    
+    # Verify Rye-specific configuration
+    scripts_str = ' '.join(builder.scripts)
+    assert 'rye sync' in scripts_str, "Rye sync command not found"
 
-# Test each kind
-test_uv: IProxy = a_print_schematic_info("test_uv", "uv", "UV")
-test_rye: IProxy = a_print_schematic_info("test_rye", "rye", "RYE")
-# test_setuppy: IProxy = a_print_schematic_info("test_setuppy", "setup.py", "SETUP.PY")
-test_auto: IProxy = a_print_schematic_info("test_requirements", "auto", "AUTO")
-test_source: IProxy = a_print_schematic_info("test_source", "source", "SOURCE")
-# not covered
-# test_resource: IProxy = a_print_schematic_info("test_resource", "resource", "RESOURCE")
 
-# Simple all-in-one test
-@injected
-async def a_test_all_kinds(schematics_universal):
-    """Test all kinds in sequence"""
+# Test auto-detection with requirements.txt
+@injected_pytest(test_design)
+async def test_auto_requirements(schematics_universal, logger):
+    """Test auto-detection with requirements.txt project"""
+    logger.info(f"\n{'='*60}")
+    logger.info("Testing AUTO kind with project: test_requirements")
+    logger.info(f"{'='*60}")
+    
+    project = ProjectDef(dirs=[ProjectDir("test_requirements", kind="auto")])
+    schematic = await schematics_universal(
+        target=project,
+        base_image='python:3.11-slim'
+    )
+    
+    builder = schematic.builder
+    logger.info(f"Base image: {builder.base_image}")
+    logger.info(f"Macros count: {len(builder.macros)}")
+    logger.info(f"Scripts count: {len(builder.scripts)}")
+    
+    # Verify requirements.txt handling
+    scripts_str = ' '.join(builder.scripts)
+    assert 'pip install' in scripts_str, "pip install command not found for requirements.txt"
+
+
+# Test source-only project
+@injected_pytest(test_design)
+async def test_source_project(schematics_universal, logger):
+    """Test source-only project (no Python environment)"""
+    logger.info(f"\n{'='*60}")
+    logger.info("Testing SOURCE kind with project: test_source")
+    logger.info(f"{'='*60}")
+    
+    project = ProjectDef(dirs=[ProjectDir("test_source", kind="source")])
+    schematic = await schematics_universal(
+        target=project,
+        base_image='ubuntu:22.04'
+    )
+    
+    builder = schematic.builder
+    logger.info(f"Base image: {builder.base_image}")
+    logger.info(f"Macros count: {len(builder.macros)}")
+    logger.info(f"Scripts count: {len(builder.scripts)}")
+    
+    # Verify source projects have no Python setup scripts
+    assert len(builder.scripts) == 0, "Source projects should have no scripts"
+    assert builder.base_image == 'ubuntu:22.04'
+
+# Test all project kinds in one test
+@injected_pytest(test_design)
+async def test_all_project_kinds(schematics_universal, logger):
+    """Test all project kinds to ensure schematics work correctly"""
     test_cases = [
-        ("test_uv", "uv", "UV"),
-        ("test_rye", "rye", "RYE"),
-        ("test_setuppy", "setup.py", "SETUP.PY"),
-        ("test_requirements", "auto", "AUTO (requirements.txt)"),
-        ("test_source", "source", "SOURCE"),
-        ("test_resource", "resource", "RESOURCE"),
+        ("test_uv", "uv", "uv sync", 'python:3.11-slim'),
+        ("test_rye", "rye", "rye sync", 'python:3.11-slim'),
+        ("test_requirements", "auto", "pip install", 'python:3.11-slim'),
+        ("test_source", "source", None, 'ubuntu:22.04'),
     ]
     
-    results = []
-    for project_id, kind, expected_kind in test_cases:
-        result = await a_print_schematic_info(
-            schematics_universal, 
-            project_id=project_id,
-            kind=kind,
-            expected_kind=expected_kind
+    for project_id, kind, expected_command, expected_base_image in test_cases:
+        logger.info(f"\nTesting {kind} project: {project_id}")
+        
+        project = ProjectDef(dirs=[ProjectDir(project_id, kind=kind)])
+        schematic = await schematics_universal(
+            target=project,
+            base_image=expected_base_image
         )
-        results.append(result)
-    
-    logger.info(f"\n{'='*60}")
-    logger.info("ALL TESTS COMPLETED")
-    logger.info(f"{'='*60}")
-    for result in results:
-        logger.info(f"✓ {result}")
-    
-    return results
-
-#test_all: IProxy = a_test_all_kinds(schematics_universal)
-if __name__ == '__main__':
-    pass
-
-# Design configuration with storage resolver override
-__meta_design__ = design(
-    overrides=load_env_design + design(
-        storage_resolver=test_storage_resolver
-    )
-)
+        
+        builder = schematic.builder
+        scripts_str = ' '.join(builder.scripts)
+        
+        # Verify base image
+        assert builder.base_image == expected_base_image, f"Wrong base image for {kind}"
+        
+        # Verify expected commands
+        if expected_command:
+            assert expected_command in scripts_str, f"{expected_command} not found for {kind}"
+        else:
+            assert len(builder.scripts) == 0, "Source project should have no scripts"
+        
+        logger.info(f"✓ {kind} project validated successfully")

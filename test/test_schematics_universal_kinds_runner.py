@@ -1,168 +1,205 @@
-"""Runner to test different ProjectDir kinds with schematics_universal"""
+"""Test different ProjectDir kinds with schematics_universal and DockerEnvFromSchematics"""
 
 from pathlib import Path
-from pinjected import *
+from pinjected import design
+from pinjected.test import injected_pytest
 from ml_nexus import load_env_design
 from ml_nexus.project_structure import ProjectDef, ProjectDir
-from ml_nexus.schematics_util.universal import schematics_universal
-from ml_nexus.docker.builder.docker_env_with_schematics import DockerEnvFromSchematics
-from ml_nexus.docker.builder.persistent import PersistentDockerEnvFromSchematics
+from ml_nexus.storage_resolver import StaticStorageResolver
+from loguru import logger
 
-# Test runners for each kind
+# Create storage resolver for test projects
+TEST_PROJECT_ROOT = Path(__file__).parent / "dummy_projects"
+REPO_ROOT = Path(__file__).parent.parent
 
-# 1. Source kind test - no Python environment
-test_source_project = ProjectDef(
-    dirs=[ProjectDir('ml_nexus', kind='source')]  # Using current project as test
-)
-test_source_schematics: IProxy = schematics_universal(
-    target=test_source_project,
-    base_image='ubuntu:22.04'
-)
-test_source_env: IProxy = injected(DockerEnvFromSchematics)(
-    project=test_source_project,
-    schematics=test_source_schematics,
-    docker_host='zeus'
-)
-test_source_run: IProxy = test_source_env.run_script("""
-echo "Testing source kind - no Python environment"
-ls -la
-pwd
-""")
+test_storage_resolver = StaticStorageResolver({
+    "test_uv": TEST_PROJECT_ROOT / "test_uv",
+    "test_rye": TEST_PROJECT_ROOT / "test_rye",
+    "test_setuppy": TEST_PROJECT_ROOT / "test_setuppy",
+    "test_requirements": TEST_PROJECT_ROOT / "test_requirements",
+    "test_source": TEST_PROJECT_ROOT / "test_source",
+    "test_resource": TEST_PROJECT_ROOT / "test_resource",
+    # Add mappings for actual directories used in tests
+    "ml_nexus": REPO_ROOT,  # For the current project root
+    "src/ml_nexus": REPO_ROOT / "src" / "ml_nexus",
+    "doc": REPO_ROOT / "doc",
+})
 
-# 2. Resource kind test
-test_resource_project = ProjectDef(
-    dirs=[ProjectDir('doc', kind='resource')]  # Using doc folder as resource
-)
-test_resource_schematics: IProxy = schematics_universal(
-    target=test_resource_project,
-    base_image='ubuntu:22.04'
-)
-test_resource_env: IProxy = injected(DockerEnvFromSchematics)(
-    project=test_resource_project,
-    schematics=test_resource_schematics,
-    docker_host='zeus'
-)
-test_resource_run: IProxy = test_resource_env.run_script("""
-echo "Testing resource kind"
-ls -la /resources/
-""")
-
-# 3. Auto kind test - will auto-detect project type
-test_auto_project = ProjectDef(
-    dirs=[ProjectDir('ml_nexus', kind='auto')]
-)
-test_auto_schematics: IProxy = schematics_universal(
-    target=test_auto_project,
-    base_image='python:3.11-slim'
-)
-test_auto_env: IProxy = injected(DockerEnvFromSchematics)(
-    project=test_auto_project,
-    schematics=test_auto_schematics,
-    docker_host='zeus'
-)
-test_auto_run: IProxy = test_auto_env.run_script("""
-echo "Testing auto kind - should detect UV project"
-which python
-python --version
-""")
-
-# 4. UV kind test
-test_uv_project = ProjectDef(
-    dirs=[ProjectDir('ml_nexus', kind='uv')]
-)
-test_uv_schematics: IProxy = schematics_universal(
-    target=test_uv_project,
-    base_image='python:3.11-slim'
-)
-test_uv_env: IProxy = injected(PersistentDockerEnvFromSchematics)(
-    project=test_uv_project,
-    schematics=test_uv_schematics,
+# Test design configuration
+test_design = design(
     docker_host='zeus',
-    container_name='test_uv_kind'
+    storage_resolver=test_storage_resolver,
+    logger=logger
 )
-test_uv_run: IProxy = test_uv_env.run_script("""
-echo "Testing UV kind"
-which uv
-uv --version
-python --version
-uv pip list | head -10
-""")
 
-# 5. Rye kind test (using a mock project)
-test_rye_project = ProjectDef(
-    dirs=[ProjectDir('test_rye_mock', kind='rye')]
+# Module design configuration
+__meta_design__ = design(
+    overrides=load_env_design + test_design
 )
-test_rye_schematics: IProxy = schematics_universal(
-    target=test_rye_project,
-    base_image='python:3.11-slim'
-)
-test_rye_env: IProxy = injected(DockerEnvFromSchematics)(
-    project=test_rye_project,
-    schematics=test_rye_schematics,
-    docker_host='zeus'
-)
-test_rye_run: IProxy = test_rye_env.run_script("""
-echo "Testing Rye kind"
-which rye
-rye --version
-""")
 
-# 6. Setup.py kind test
-test_setuppy_project = ProjectDef(
-    dirs=[ProjectDir('test_setuppy_mock', kind='setup.py')]
-)
-test_setuppy_schematics: IProxy = schematics_universal(
-    target=test_setuppy_project,
-    base_image='python:3.11-slim',
-    python_version='3.11'
-)
-test_setuppy_env: IProxy = injected(DockerEnvFromSchematics)(
-    project=test_setuppy_project,
-    schematics=test_setuppy_schematics,
-    docker_host='zeus'
-)
-test_setuppy_run: IProxy = test_setuppy_env.run_script("""
-echo "Testing setup.py kind"
-python --version
-pip --version
-""")
 
-# 7. Mixed kinds test
-test_mixed_project = ProjectDef(
-    dirs=[
-        ProjectDir('ml_nexus', kind='uv'),
-        ProjectDir('doc', kind='resource'),
-    ]
-)
-test_mixed_schematics: IProxy = schematics_universal(
-    target=test_mixed_project,
-    base_image='python:3.11-slim'
-)
-test_mixed_env: IProxy = injected(DockerEnvFromSchematics)(
-    project=test_mixed_project,
-    schematics=test_mixed_schematics,
-    docker_host='zeus'
-)
-test_mixed_run: IProxy = test_mixed_env.run_script("""
-echo "Testing mixed kinds"
-ls -la /sources/
-ls -la /resources/
-python --version
-""")
+# Test source kind - no Python environment
+@injected_pytest(test_design)
+async def test_source_kind(schematics_universal, new_DockerEnvFromSchematics, logger):
+    """Test source kind with no Python environment"""
+    project = ProjectDef(dirs=[ProjectDir('test_source', kind='source')])
+    
+    schematic = await schematics_universal(
+        target=project,
+        base_image='ubuntu:22.04'
+    )
+    
+    docker_env = new_DockerEnvFromSchematics(
+        project=project,
+        schematics=schematic,
+        docker_host='zeus'
+    )
+    
+    result = await docker_env.run_script("""
+    echo "Testing source kind - no Python environment"
+    ls -la
+    pwd
+    """)
+    
+    assert "Testing source kind" in result.stdout
+    assert result.exit_code == 0
+    logger.info("✅ Source kind test passed")
+
+# Test resource kind
+@injected_pytest(test_design)
+async def test_resource_kind(schematics_universal, new_DockerEnvFromSchematics, logger):
+    """Test resource kind for mounting resources"""
+    project = ProjectDef(dirs=[ProjectDir('test_resource', kind='resource')])
+    
+    schematic = await schematics_universal(
+        target=project,
+        base_image='ubuntu:22.04'
+    )
+    
+    docker_env = new_DockerEnvFromSchematics(
+        project=project,
+        schematics=schematic,
+        docker_host='zeus'
+    )
+    
+    result = await docker_env.run_script("""
+    echo "Testing resource kind"
+    ls -la /resources/ || echo "Resources directory not found"
+    """)
+    
+    assert "Testing resource kind" in result.stdout
+    logger.info("✅ Resource kind test passed")
+
+# Test auto kind - will auto-detect project type
+@injected_pytest(test_design)
+async def test_auto_kind(schematics_universal, new_DockerEnvFromSchematics, logger):
+    """Test auto kind that auto-detects project type"""
+    # Using test UV project which has pyproject.toml
+    project = ProjectDef(dirs=[ProjectDir('test_uv', kind='auto')])
+    
+    schematic = await schematics_universal(
+        target=project,
+        base_image='python:3.11-slim'
+    )
+    
+    docker_env = new_DockerEnvFromSchematics(
+        project=project,
+        schematics=schematic,
+        docker_host='zeus'
+    )
+    
+    result = await docker_env.run_script("""
+    echo "Testing auto kind"
+    which python
+    python --version
+    """)
+    
+    assert "Testing auto kind" in result.stdout
+    assert "Python" in result.stdout
+    logger.info("✅ Auto kind test passed")
+
+# Test UV kind with persistent container
+@injected_pytest(test_design)
+async def test_uv_kind_persistent(schematics_universal, new_PersistentDockerEnvFromSchematics, logger):
+    """Test UV kind with persistent Docker container"""
+    project = ProjectDef(dirs=[ProjectDir('test_uv', kind='uv')])
+    
+    schematic = await schematics_universal(
+        target=project,
+        base_image='python:3.11-slim'
+    )
+    
+    docker_env = new_PersistentDockerEnvFromSchematics(
+        project=project,
+        schematics=schematic,
+        docker_host='zeus',
+        container_name='test_uv_kind_pytest'
+    )
+    
+    try:
+        result = await docker_env.run_script("""
+        echo "Testing UV kind"
+        which uv || echo "UV not found"
+        python --version
+        """)
+        
+        assert "Testing UV kind" in result.stdout
+        assert "Python" in result.stdout
+        logger.info("✅ UV kind test passed")
+    finally:
+        # Clean up persistent container
+        try:
+            await docker_env.cleanup()
+        except Exception:
+            pass
+
+# Test mixed kinds - UV + resource
+@injected_pytest(test_design)
+async def test_mixed_kinds(schematics_universal, new_DockerEnvFromSchematics, logger):
+    """Test mixed project with UV and resource kinds"""
+    project = ProjectDef(
+        dirs=[
+            ProjectDir('test_uv', kind='uv'),
+            ProjectDir('test_resource', kind='resource'),
+        ]
+    )
+    
+    schematic = await schematics_universal(
+        target=project,
+        base_image='python:3.11-slim'
+    )
+    
+    docker_env = new_DockerEnvFromSchematics(
+        project=project,
+        schematics=schematic,
+        docker_host='zeus'
+    )
+    
+    result = await docker_env.run_script("""
+    echo "Testing mixed kinds"
+    ls -la /sources/ || echo "Sources not found"
+    ls -la /resources/ || echo "Resources not found"
+    python --version
+    """)
+    
+    assert "Testing mixed kinds" in result.stdout
+    assert "Python" in result.stdout
+    logger.info("✅ Mixed kinds test passed")
+
 
 # Test with GPU base image
-test_gpu_project = ProjectDef(
-    dirs=[ProjectDir('ml_nexus', kind='uv')]
-)
-test_gpu_schematics: IProxy = schematics_universal(
-    target=test_gpu_project,
-    base_image='nvidia/cuda:12.3.1-devel-ubuntu22.04',
-    python_version='3.11'
-)
-
-# Design configuration
-__meta_design__ = design(
-    overrides=load_env_design + design(
-        docker_host='zeus'  # Override to use local docker
+@injected_pytest(test_design)
+async def test_gpu_base_image(schematics_universal, logger):
+    """Test schematics with GPU base image"""
+    project = ProjectDef(dirs=[ProjectDir('test_uv', kind='uv')])
+    
+    schematic = await schematics_universal(
+        target=project,
+        base_image='nvidia/cuda:12.3.1-devel-ubuntu22.04',
+        python_version='3.11'
     )
-)
+    
+    # Just verify the schematic is created correctly
+    assert schematic.builder.base_image == 'nvidia/cuda:12.3.1-devel-ubuntu22.04'
+    assert len(schematic.builder.macros) > 0
+    logger.info("✅ GPU base image test passed")

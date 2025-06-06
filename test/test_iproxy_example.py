@@ -1,19 +1,16 @@
-"""Example of how to write pytest-compatible IProxy tests
+"""Example of how to write tests with @injected_pytest decorator
 
-This demonstrates the recommended pattern for creating tests with IProxy
-objects that can be discovered and run by pytest.
+This demonstrates the recommended pattern for creating tests using
+the @injected_pytest decorator that can be discovered and run by pytest.
 """
 
 from pathlib import Path
-from pinjected import IProxy, injected, design
+from pinjected import design
+from pinjected.test import injected_pytest
 from ml_nexus import load_env_design
 from ml_nexus.project_structure import ProjectDef, ProjectDir
-from ml_nexus.schematics_util.universal import schematics_universal
 from ml_nexus.storage_resolver import StaticStorageResolver
 from loguru import logger
-
-# Import the conversion utility
-from test.iproxy_test_utils import to_pytest
 
 # Setup test project resolver
 TEST_PROJECT_ROOT = Path(__file__).parent / "dummy_projects"
@@ -22,18 +19,20 @@ test_storage_resolver = StaticStorageResolver({
     "test_source": TEST_PROJECT_ROOT / "test_source",
 })
 
-# Configure design
+# Test design configuration
+test_design = design(
+    storage_resolver=test_storage_resolver,
+    logger=logger
+)
+
+# Module design configuration
 __meta_design__ = design(
-    overrides=load_env_design + design(
-        storage_resolver=test_storage_resolver,
-        logger=logger
-    )
+    overrides=load_env_design + test_design
 )
 
 
-# Step 1: Define your test as an injected function
-@injected
-async def a_test_uv_project(schematics_universal, logger):
+@injected_pytest(test_design)
+async def test_uv_project(schematics_universal, logger):
     """Test UV project configuration"""
     project = ProjectDef(dirs=[ProjectDir("test_uv", kind="uv")])
     
@@ -47,23 +46,13 @@ async def a_test_uv_project(schematics_universal, logger):
     scripts_str = ' '.join(builder.scripts)
     assert 'uv sync' in scripts_str, "UV sync command not found"
     
-    logger.info(f"✅ UV project test passed")
+    logger.info("✅ UV project test passed")
     logger.info(f"  - Macros: {len(builder.macros)}")
     logger.info(f"  - Scripts: {len(builder.scripts)}")
-    
-    return True
 
 
-# Step 2: Create IProxy object
-test_uv_project_iproxy: IProxy = a_test_uv_project(schematics_universal, logger)
-
-# Step 3: Convert to pytest function
-test_uv_project = to_pytest(test_uv_project_iproxy)
-
-
-# You can also define multiple tests in the same file
-@injected
-async def a_test_source_project(schematics_universal, logger):
+@injected_pytest(test_design)
+async def test_source_project(schematics_universal, logger):
     """Test source-only project (no Python environment)"""
     project = ProjectDef(dirs=[ProjectDir("test_source", kind="source")])
     
@@ -77,12 +66,6 @@ async def a_test_source_project(schematics_universal, logger):
     assert len(builder.scripts) == 0, "Source projects should have no scripts"
     
     logger.info("✅ Source project test passed")
-    return True
-
-
-# Create and convert another test
-test_source_project_iproxy: IProxy = a_test_source_project(schematics_universal, logger)
-test_source_project = to_pytest(test_source_project_iproxy)
 
 
 # Now pytest can discover and run these tests normally:

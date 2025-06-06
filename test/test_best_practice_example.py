@@ -1,19 +1,16 @@
-"""Best practice example for IProxy tests with pytest
+"""Best practice example for tests with @injected_pytest decorator
 
 This demonstrates the recommended approach for writing pytest-compatible
-IProxy tests in the ml-nexus project.
+tests using the @injected_pytest decorator in the ml-nexus project.
 """
 
 from pathlib import Path
-from pinjected import IProxy, injected, design, injected as injected_dep
+from pinjected import design
+from pinjected.test import injected_pytest
 from ml_nexus import load_env_design
 from ml_nexus.project_structure import ProjectDef, ProjectDir
-from ml_nexus.schematics_util.universal import schematics_universal
 from ml_nexus.storage_resolver import StaticStorageResolver
 from loguru import logger
-
-# Always import the conversion utility
-from test.iproxy_test_utils import to_pytest
 
 # Setup test environment
 TEST_PROJECT_ROOT = Path(__file__).parent / "dummy_projects"
@@ -25,18 +22,21 @@ test_storage_resolver = StaticStorageResolver({
     "test_source": TEST_PROJECT_ROOT / "test_source",
 })
 
+# Test design configuration
+test_design = design(
+    storage_resolver=test_storage_resolver,
+    logger=logger
+)
+
 # Module design configuration
 __meta_design__ = design(
-    overrides=load_env_design + design(
-        storage_resolver=test_storage_resolver,
-        logger=logger
-    )
+    overrides=load_env_design + test_design
 )
 
 
 # ===== Test 1: Async test example =====
-@injected
-async def a_test_uv_configuration(schematics_universal, logger):
+@injected_pytest(test_design)
+async def test_uv_configuration(schematics_universal, logger):
     """Test UV project configuration generates correct dockerfile components"""
     # Arrange
     project = ProjectDef(dirs=[ProjectDir("test_uv", kind="uv")])
@@ -57,14 +57,11 @@ async def a_test_uv_configuration(schematics_universal, logger):
     
     logger.info(f"✅ UV configuration test passed with {len(builder.scripts)} scripts")
 
-# Create IProxy and convert for pytest
-test_uv_configuration_iproxy: IProxy = a_test_uv_configuration(schematics_universal, logger)
-test_uv_configuration = to_pytest(test_uv_configuration_iproxy)
 
 
-# ===== Test 2: Sync test example =====
-@injected
-async def a_test_storage_resolver(storage_resolver, logger):
+# ===== Test 2: Storage resolver test example =====
+@injected_pytest(test_design)
+async def test_storage_resolver(storage_resolver, logger):
     """Test that our custom storage resolver works correctly"""
     # Test locate method exists
     assert hasattr(storage_resolver, 'locate'), "Storage resolver missing locate method"
@@ -79,14 +76,11 @@ async def a_test_storage_resolver(storage_resolver, logger):
     
     logger.info("✅ Storage resolver test passed")
 
-# Create IProxy and convert
-test_storage_resolver_iproxy: IProxy = a_test_storage_resolver(injected_dep("storage_resolver"), logger)
-test_storage_resolver = to_pytest(test_storage_resolver_iproxy)
 
 
 # ===== Test 3: Parameterized test example =====
-@injected
-async def a_test_multiple_project_kinds(schematics_universal, logger):
+@injected_pytest(test_design)
+async def test_multiple_project_kinds(schematics_universal, logger):
     """Test multiple project kinds in a single test"""
     test_cases = [
         ("test_uv", "uv", "uv sync"),
@@ -110,21 +104,15 @@ async def a_test_multiple_project_kinds(schematics_universal, logger):
         if expected_command:
             assert expected_command in scripts_str, f"{expected_command} not found for {kind}"
         else:
-            assert len(schematic.builder.scripts) == 0, f"Source project should have no scripts"
+            assert len(schematic.builder.scripts) == 0, "Source project should have no scripts"
         
         logger.info(f"  ✓ {kind} project validated")
     
     logger.info("✅ All project kinds tested successfully")
 
-# Create IProxy and convert
-test_multiple_kinds_iproxy: IProxy = a_test_multiple_project_kinds(schematics_universal, logger)
-test_multiple_project_kinds = to_pytest(test_multiple_kinds_iproxy)
-if __name__ == '__main__':
-    pass
-
 # ===== Pattern Summary =====
-# 1. Import `to_pytest` utility
-# 2. Write test as @injected function  
-# 3. Create IProxy: test_name_iproxy = injected_func(deps)
-# 4. Convert: test_name = to_pytest(test_name_iproxy)
-# 5. pytest discovers and runs `test_name` normally
+# 1. Import `from pinjected.test import injected_pytest`
+# 2. Create test_design with test-specific bindings
+# 3. Write test with @injected_pytest(test_design) decorator
+# 4. Test function name must start with 'test_' for pytest discovery
+# 5. pytest discovers and runs tests normally

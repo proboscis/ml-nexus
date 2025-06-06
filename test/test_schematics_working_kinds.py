@@ -1,10 +1,10 @@
-"""Test working schematics_universal kinds"""
+"""Test working schematics_universal kinds using @injected_pytest"""
 
 from pathlib import Path
-from pinjected import *
+from pinjected import design
+from pinjected.test import injected_pytest
 from ml_nexus import load_env_design
 from ml_nexus.project_structure import ProjectDef, ProjectDir
-from ml_nexus.schematics_util.universal import schematics_universal
 from ml_nexus.storage_resolver import StaticStorageResolver
 from loguru import logger
 
@@ -20,9 +20,21 @@ test_storage_resolver = StaticStorageResolver({
     "test_resource": TEST_PROJECT_ROOT / "test_resource",
 })
 
+# Test design configuration
+test_design = design(
+    storage_resolver=test_storage_resolver,
+    logger=logger
+)
+
+# Module design configuration
+__meta_design__ = design(
+    overrides=load_env_design + test_design
+)
+
+
 # Test working kinds
-@injected
-async def a_test_working_schematics(
+@injected_pytest(test_design)
+async def test_working_schematics(
     schematics_universal,
     logger
 ):
@@ -58,7 +70,7 @@ async def a_test_working_schematics(
             )
             
             builder = schematic.builder
-            logger.info(f"✓ Successfully created schematic")
+            logger.info("✓ Successfully created schematic")
             logger.info(f"  Base image: {builder.base_image}")
             logger.info(f"  Macros count: {len(builder.macros)}")
             logger.info(f"  Scripts count: {len(builder.scripts)}")
@@ -68,16 +80,16 @@ async def a_test_working_schematics(
             scripts_str = ' '.join(builder.scripts)
             
             if kind == 'uv' and 'uv sync' in scripts_str:
-                logger.info(f"  ✓ Found 'uv sync' command")
+                logger.info("  ✓ Found 'uv sync' command")
             elif kind == 'rye' and 'rye sync' in scripts_str:
-                logger.info(f"  ✓ Found 'rye sync' command")
+                logger.info("  ✓ Found 'rye sync' command")
             elif kind == 'source':
-                logger.info(f"  ✓ No Python environment setup (as expected)")
+                logger.info("  ✓ No Python environment setup (as expected)")
             elif kind == 'auto':
                 if 'pip install -e .' in scripts_str:
-                    logger.info(f"  ✓ Found 'pip install -e .' for setup.py")
+                    logger.info("  ✓ Found 'pip install -e .' for setup.py")
                 elif 'pip install' in scripts_str and 'requirements.txt' in scripts_str:
-                    logger.info(f"  ✓ Found pip install for requirements.txt")
+                    logger.info("  ✓ Found pip install for requirements.txt")
             
             results.append({
                 "kind": expected_kind,
@@ -110,13 +122,9 @@ async def a_test_working_schematics(
     total = len(results)
     logger.info(f"\nTotal: {passed}/{total} passed")
     
-    return results
-
-test_working: IProxy = a_test_working_schematics(schematics_universal, logger)
-
-# Design configuration with storage resolver override
-__meta_design__ = design(
-    overrides=load_env_design + design(
-        storage_resolver=test_storage_resolver
-    )
-)
+    # Assert all tests passed
+    assert passed == total, f"Only {passed}/{total} tests passed"
+    
+    # Additional assertions for each test case
+    for result in results:
+        assert result["status"] == "✓ PASSED", f"{result['kind']} failed: {result.get('error', 'Unknown error')}"
