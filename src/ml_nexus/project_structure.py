@@ -15,7 +15,7 @@ import pandas as pd
 @dataclass
 class ProjectDir:
     id: str
-    kind: Literal['source', 'resource', 'auto', 'rye', 'uv', 'setup.py'] = 'auto'
+    kind: Literal['source', 'resource', 'auto', 'auto-embed', 'rye', 'uv', 'setup.py', 'pyvenv-embed'] = 'auto'
     dependencies: list["ProjectDir"] = field(default_factory=list)
     excludes: list[str] = field(default_factory=list)
     extra_dependencies: list["PlatformDependantPypi"] = field(default_factory=list)

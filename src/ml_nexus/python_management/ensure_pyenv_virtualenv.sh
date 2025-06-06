@@ -4,11 +4,12 @@
 # It returns proper error codes if virtualenv creation fails.
 # No fallback to temporary virtualenv - errors are propagated to the caller.
 #
-# Key features for mounted volume reuse:
+# Key features for Docker cache mount reuse:
 # - Handles git ownership warnings for mounted pyenv directories
-# - Attempts to reuse existing virtualenvs even with permission mismatches
-# - Uses --clear flag to recreate virtualenvs in existing directories
-# - Validates virtualenvs after creation to ensure they're usable
+# - Reuses existing virtualenvs if they can be activated (regardless of ownership)
+# - Tests virtualenv usability by actually activating and running Python
+# - Uses --clear flag to recreate virtualenvs only when necessary
+# - Designed to work with Docker cache mounts that persist across runs
 
 # Default values for environment variables
 : "${PYENV_ROOT:="$HOME/.pyenv"}"
@@ -165,18 +166,24 @@ install_python() {
 is_valid_virtualenv() {
     local venv_dir="$1"
     # Check for key virtualenv files/directories
-    # Also check if we can actually use it (permission check)
-    if [ -f "$venv_dir/bin/activate" ] && \
-       [ -d "$venv_dir/lib" ] && \
-       [ -f "$venv_dir/pyvenv.cfg" ]; then
-        # Try to read the activate script to verify permissions
-        if [ -r "$venv_dir/bin/activate" ]; then
-            return 0
-        else
-            log_message "Virtualenv exists but lacks read permissions"
-            return 1
-        fi
+    if [ ! -f "$venv_dir/bin/activate" ] || \
+       [ ! -d "$venv_dir/lib" ] || \
+       [ ! -f "$venv_dir/pyvenv.cfg" ]; then
+        return 1
+    fi
+    
+    # Test if we can actually use the virtualenv by activating it and running Python
+    log_message "Testing if virtualenv at $venv_dir is usable..."
+    if (
+        # Run in a subshell to avoid affecting the current environment
+        source "$venv_dir/bin/activate" 2>/dev/null && \
+        python --version >/dev/null 2>&1 && \
+        python -c "import sys; sys.exit(0)" 2>/dev/null
+    ); then
+        log_message "Virtualenv is valid and usable"
+        return 0
     else
+        log_message "Virtualenv exists but cannot be activated or used"
         return 1
     fi
 }
@@ -277,24 +284,11 @@ EOF
             # Not a symlink - check if it's a valid virtualenv directory
             if [ -d "$VENV_PATH" ]; then
                 if is_valid_virtualenv "$VENV_PATH"; then
-                    log_message "Valid virtualenv already exists at $VENV_PATH"
+                    log_message "Valid virtualenv already exists at $VENV_PATH - reusing cached virtualenv"
                     return 0
                 else
-                    log_message "Directory exists but is not a valid virtualenv at $VENV_PATH"
-                    # Check if directory is empty or nearly empty
-                    local file_count=$(find "$VENV_PATH" -type f 2>/dev/null | wc -l)
-                    if [ "$file_count" -le 1 ]; then
-                        log_message "Directory is empty or nearly empty, will try to create virtualenv in it"
-                    else
-                        log_message "Directory contains $file_count files, attempting removal"
-                        if rm -rf "$VENV_PATH" 2>/dev/null; then
-                            log_message "Successfully removed existing directory"
-                        else
-                            log_message "Failed to remove existing directory due to permissions"
-                            # Try to create virtualenv anyway - it might work
-                            log_message "Will attempt to create virtualenv despite existing directory"
-                        fi
-                    fi
+                    log_message "Directory exists but virtualenv is not usable at $VENV_PATH"
+                    log_message "Will attempt to recreate virtualenv with --clear flag"
                 fi
             fi
         fi

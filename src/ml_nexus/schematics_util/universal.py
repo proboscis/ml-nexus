@@ -87,6 +87,84 @@ async def a_pyenv_component(
     )
 
 
+@injected
+async def a_pyenv_component_embedded(
+        macro_install_pyenv_virtualenv_installer,
+        base_apt_packages_component,
+        storage_resolver: IStorageResolver,
+        logger,
+        /,
+        target: ProjectDef,
+        python_version: str = "3.12",
+):
+    """
+    Pyenv component with embedded dependencies using multi-stage Docker build.
+    This optimizes build caching by separating dependency installation from source code.
+    """
+    target_id = target.dirs[0].id
+    local_project_dir = await storage_resolver.locate(target.dirs[0].id)
+    
+    # Set up pyenv virtual environment
+    venv_setup = await macro_install_pyenv_virtualenv_installer(
+        venv_name=target_id,
+        venv_id=sha256(target_id.encode()).hexdigest()[:6],
+        python_version=python_version,
+        pip_cache_dir=Path("/root/pip_cache/pip")
+    )
+    
+    # Check for dependency files
+    requirements_path = local_project_dir / 'requirements.txt'
+    setup_py_path = local_project_dir / 'setup.py'
+    
+    # Build dependency installation layer
+    # Only include dependency files that can be processed without source code
+    dependency_install_macro = []
+    if requirements_path.exists():
+        # For requirements.txt, we can install dependencies before copying source
+        dependency_install_macro = [
+            RCopy(src=requirements_path, dst=Path(target.default_working_dir) / 'requirements.txt'),
+            f"WORKDIR {target.default_working_dir}",
+            f"RUN --mount=type=cache,target=/root/pip_cache/pip {venv_setup.command} && pip install -r requirements.txt"
+        ]
+    
+    # Copy all project files (excluding common build artifacts)
+    project_copy_macro = [
+        RsyncArgs(
+            src=local_project_dir,
+            dst=Path(target.default_working_dir),
+            excludes=[
+                '__pycache__', '*.pyc', '.git', '.ruff_cache',
+                '.pytest_cache', 'build', 'dist', '*.egg-info',
+                '.mypy_cache', '.tox', '.coverage', 'htmlcov',
+                '.cache', 'node_modules', '.env', '.DS_Store',
+                'venv', 'env', '.venv', '.pyenv'
+            ]
+        )
+    ]
+    
+    # If setup.py exists, install it after source code is copied
+    final_install = []
+    if setup_py_path.exists():
+        final_install.append(
+            f"RUN --mount=type=cache,target=/root/pip_cache/pip {venv_setup.command} && cd {target.default_working_dir} && pip install -e ."
+        )
+    
+    return EnvComponent(
+        installation_macro=[
+            venv_setup.macro,
+            *dependency_install_macro,
+            *project_copy_macro,
+            *final_install
+        ],
+        init_script=[
+            f"cd {target.default_working_dir}",
+            venv_setup.command
+        ],
+        dependencies=[base_apt_packages_component],
+        mounts=venv_setup.volumes
+    )
+
+
 @instance
 async def base64_runner_component(macro_install_base64_runner):
     return EnvComponent(
@@ -490,6 +568,7 @@ async def schematics_universal(
         a_hf_cache_component,
         base_apt_packages_component,
         a_pyenv_component,
+        a_pyenv_component_embedded,
         base64_runner_component,
         a_project_sync_component,
         a_build_schematics_from_component,
@@ -502,6 +581,7 @@ async def schematics_universal(
         ml_nexus_default_python_version: str,
         a_get_mount_request_for_pdir,
         a_component_to_install_requirements_txt,
+        a_component_to_install_requirements_txt_embedded,
         /,
         target: ProjectDef,
         base_image: Optional[str] = None,
@@ -519,6 +599,10 @@ async def schematics_universal(
                 python_components.append(
                     await a_pyenv_component(target=target, python_version=python_version)
                 )
+            case 'pyvenv-embedded':
+                python_components.append(
+                    await a_pyenv_component_embedded(target=target, python_version=python_version)
+                )
             case 'requirements.txt':
                 """
                 we need to have a dedicated installer for requirements.txt
@@ -528,6 +612,10 @@ async def schematics_universal(
                 """
                 python_components.append(
                     await a_component_to_install_requirements_txt(target=target)
+                )
+            case 'requirements.txt-embedded':
+                python_components.append(
+                    await a_component_to_install_requirements_txt_embedded(target=target)
                 )
             case 'setup.py':
                 python_components.append(
@@ -639,6 +727,100 @@ echo "Testing auto-embed UV project"
 ls -lah
 python --version
 uv --version
+"""
+)
+
+# Test for auto-embed requirements.txt project
+test_req_auto_embed_project: IProxy = ProjectDef(
+    dirs=[
+        ProjectDir(
+            id='test/dummy_projects/test_requirements',
+            kind='auto-embed'  # This will auto-detect requirements.txt and use embedded dependencies
+        )
+    ]
+)
+
+test_schematics_req_auto_embed: IProxy = schematics_universal(
+    target=test_req_auto_embed_project
+)
+
+test_req_auto_embed_docker: IProxy = injected(PersistentDockerEnvFromSchematics)(
+    project=test_req_auto_embed_project,
+    schematics=test_schematics_req_auto_embed,
+    docker_host='zeus',
+    container_name='test_req_auto_embed_docker'
+)
+
+test_req_auto_embed_docker_run: IProxy = test_req_auto_embed_docker.run_script(
+    """
+echo "Testing auto-embed requirements.txt project"
+ls -lah
+python --version
+pip list
+"""
+)
+
+# Test for pyvenv-embed project with requirements.txt
+test_pyvenv_embed_project: IProxy = ProjectDef(
+    dirs=[
+        ProjectDir(
+            id='test/dummy_projects/test_requirements',
+            kind='pyvenv-embed'
+        )
+    ]
+)
+
+test_schematics_pyvenv_embed: IProxy = schematics_universal(
+    target=test_pyvenv_embed_project,
+    python_version='3.11'
+)
+
+test_pyvenv_embed_docker: IProxy = injected(PersistentDockerEnvFromSchematics)(
+    project=test_pyvenv_embed_project,
+    schematics=test_schematics_pyvenv_embed,
+    docker_host='zeus',
+    container_name='test_pyvenv_embed_docker'
+)
+
+test_pyvenv_embed_docker_run: IProxy = test_pyvenv_embed_docker.run_script(
+    """
+echo "Testing pyvenv-embed project"
+ls -lah
+python --version
+pip list
+which python
+"""
+)
+
+# Test for pyvenv-embed project with setup.py
+test_pyvenv_embed_setuppy_project: IProxy = ProjectDef(
+    dirs=[
+        ProjectDir(
+            id='test/dummy_projects/test_setuppy',
+            kind='pyvenv-embed'
+        )
+    ]
+)
+
+test_schematics_pyvenv_embed_setuppy: IProxy = schematics_universal(
+    target=test_pyvenv_embed_setuppy_project,
+    python_version='3.11'
+)
+
+test_pyvenv_embed_setuppy_docker: IProxy = injected(PersistentDockerEnvFromSchematics)(
+    project=test_pyvenv_embed_setuppy_project,
+    schematics=test_schematics_pyvenv_embed_setuppy,
+    docker_host='zeus',
+    container_name='test_pyvenv_embed_setuppy_docker'
+)
+
+test_pyvenv_embed_setuppy_docker_run: IProxy = test_pyvenv_embed_setuppy_docker.run_script(
+    """
+echo "Testing pyvenv-embed project with setup.py"
+ls -lah
+python --version
+pip list
+which python
 """
 )
 

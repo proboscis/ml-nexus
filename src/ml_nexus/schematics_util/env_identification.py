@@ -265,6 +265,23 @@ async def a_prepare_setup_script_with_deps(
             schema = IdentifiedSchema(schema=RyeSchema(type='rye'),justification="directly set rye")
         case 'poetry':
             schema = IdentifiedSchema(schema=PoetrySchema(type='poetry'),justification="directly set poetry")
+        case 'pyvenv-embed':
+            # Detect if it's setup.py or requirements.txt based project
+            repo_path = await storage_resolver.locate(target.dirs[0].id)
+            if (repo_path / 'setup.py').exists():
+                return SetupScriptWithDeps(
+                    cxt=new_ProjectContext(repo=repo), 
+                    script="pip install -e .",
+                    env_deps=['pyvenv-embedded', 'setup.py']
+                )
+            elif (repo_path / 'requirements.txt').exists():
+                return SetupScriptWithDeps(
+                    cxt=new_ProjectContext(repo=repo), 
+                    script="pip install -r requirements.txt",
+                    env_deps=['pyvenv-embedded', 'requirements.txt']
+                )
+            else:
+                raise NotImplementedError(f"pyvenv-embed requires either setup.py or requirements.txt")
         case _:
             raise NotImplementedError(f"kind:{target.dirs[0].kind} is not implemented for schema identification")
     return await a_schema_to_setup_script_with_deps(schema, repo)
