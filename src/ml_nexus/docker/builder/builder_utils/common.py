@@ -57,11 +57,17 @@ async def gather_rsync_macros_project_def(
     async with TaskGroup() as tg:
 
         async def task(pdir):
-            kind = (
-                await a_infer_source_kind(pdir.path)
-                if pdir.kind == "auto"
-                else pdir.kind
-            )
+            if pdir.kind == "auto":
+                kind = await a_infer_source_kind(pdir.path)
+            elif pdir.kind == "auto-embed":
+                # For auto-embed, treat as source (no patching)
+                # We could infer the actual kind but it's not needed since we copy as source
+                kind = "source"  # Copy as source without patching
+            elif pdir.kind == "pyvenv-embed":
+                # Treat pyvenv-embed as source (no patching)
+                kind = "source"
+            else:
+                kind = pdir.kind
             if kind == "source":
                 local_path = await storage_resolver.locate(pdir.id)
                 return new_RsyncArgs(

@@ -122,6 +122,13 @@ async def a_get_mount_request_for_pdir(
 ) -> MountRequest:
     if pdir.kind == "auto":
         kind = await a_infer_source_kind(await storage_resolver.locate(pdir.id))
+    elif pdir.kind == "auto-embed":
+        # For auto-embed, we'll mount as source (no patching needed)
+        # We could infer the actual kind but it's not needed since we treat it as source
+        kind = "source"
+    elif pdir.kind == "pyvenv-embed":
+        # Treat pyvenv-embed as source mount (no patching needed)
+        kind = "source"
     else:
         kind = pdir.kind
 
