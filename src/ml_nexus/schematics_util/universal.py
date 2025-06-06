@@ -183,7 +183,7 @@ async def a_pyenv_component_embedded(
         ],
         init_script=[f"cd {target.default_working_dir}", venv_setup.command],
         dependencies=[base_apt_packages_component],
-        mounts=venv_setup.volumes,
+        mounts=[],  # No cache mounts for embedded components - everything is in the image
     )
 
 
@@ -368,9 +368,6 @@ async def a_uv_component_embedded(
     # Get the local project directory
     local_project_dir = await storage_resolver.locate(target.dirs[0].id)
 
-    # Cache mount for UV
-    uv_cache = CacheMountRequest("uv_cache", Path("/root/.cache/uv"))
-
     # Create macro for dependency caching stage
     dependency_copy_macros = []
 
@@ -448,7 +445,7 @@ async def a_uv_component_embedded(
             "uv self update",
             *scripts,
         ],
-        mounts=[uv_cache],
+        mounts=[],  # No cache mounts for embedded components - everything is in the image
     )
 
 
