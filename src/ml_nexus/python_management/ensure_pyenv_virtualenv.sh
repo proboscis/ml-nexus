@@ -206,25 +206,128 @@ setup_virtualenv() {
         return $?
     fi
 
-    # If directory exists but is not a valid virtualenv, clean it up
-    if [ -d "$VENV_PATH" ]; then
-        if ! is_valid_virtualenv "$VENV_PATH"; then
-            log_message "Directory exists but is not a valid virtualenv. Removing $VENV_PATH"
-            if rm -rf "$VENV_PATH" 2>/dev/null; then
-                log_message "Successfully removed existing directory"
+    # Check if VENV_PATH exists (as file, directory, or symlink)
+    if [ -e "$VENV_PATH" ] || [ -L "$VENV_PATH" ]; then
+        # Check if it's a symlink
+        if [ -L "$VENV_PATH" ]; then
+            # Get the direct symlink target (without resolving all symlinks in path)
+            local SYMLINK_TARGET=$(readlink "$VENV_PATH")
+            log_message "Detected symlink: $VENV_PATH -> $SYMLINK_TARGET"
+            
+            # Create parent directories at the target location if needed
+            local target_parent=$(dirname "$SYMLINK_TARGET")
+            if [ ! -d "$target_parent" ]; then
+                log_message "Creating parent directory for symlink target: $target_parent"
+                if ! mkdir -p "$target_parent" 2>/dev/null; then
+                    log_message "Failed to create parent directory for symlink target"
+                    debug_info
+                    log_message "Attempting to create a temporary virtualenv instead"
+                    create_temp_virtualenv
+                    return $?
+                fi
+            fi
+            
+            # Check if target has a valid virtualenv
+            if [ -d "$SYMLINK_TARGET" ] && is_valid_virtualenv "$SYMLINK_TARGET"; then
+                log_message "Valid virtualenv already exists at symlink target: $SYMLINK_TARGET"
+                return 0
             else
-                log_message "Failed to remove existing directory"
+                log_message "Creating virtualenv at symlink target: $SYMLINK_TARGET"
+                # Create virtualenv at the symlink target
+                if python -m venv "$SYMLINK_TARGET"; then
+                    log_message "Successfully created virtualenv at symlink target"
+                    
+                    # Verify symlink still points correctly
+                    local current_target=$(readlink "$VENV_PATH")
+                    if [ "$current_target" != "$SYMLINK_TARGET" ]; then
+                        log_message "ERROR: Symlink was modified during virtualenv creation!"
+                        return 1
+                    fi
+                    
+                    # Generate activation script
+                    cat > activate_venv.sh << EOF
+#!/bin/bash
+source "$VENV_PATH/bin/activate"
+EOF
+                    chmod +x activate_venv.sh
+                    return 0
+                else
+                    log_message "Failed to create virtualenv at symlink target"
+                    debug_info
+                    log_message "Attempting to create a temporary virtualenv instead"
+                    create_temp_virtualenv
+                    return $?
+                fi
+            fi
+        else
+            # Not a symlink - check if it's a valid virtualenv directory
+            if [ -d "$VENV_PATH" ]; then
+                if is_valid_virtualenv "$VENV_PATH"; then
+                    log_message "Valid virtualenv already exists at $VENV_PATH"
+                    return 0
+                else
+                    log_message "Directory exists but is not a valid virtualenv. Removing $VENV_PATH"
+                    if rm -rf "$VENV_PATH" 2>/dev/null; then
+                        log_message "Successfully removed existing directory"
+                    else
+                        log_message "Failed to remove existing directory"
+                        debug_info
+                        log_message "Attempting to create a temporary virtualenv instead"
+                        create_temp_virtualenv
+                        return $?
+                    fi
+                fi
+            fi
+        fi
+    fi
+
+    # Path doesn't exist - check if parent directory is a symlink
+    if [ -L "$parent_dir" ]; then
+        # Parent is a symlink - get its direct target
+        local PARENT_TARGET=$(readlink "$parent_dir")
+        local VENV_NAME=$(basename "$VENV_PATH")
+        local TARGET_PATH="$PARENT_TARGET/$VENV_NAME"
+        
+        log_message "Parent directory is a symlink: $parent_dir -> $PARENT_TARGET"
+        log_message "Creating virtualenv at target path: $TARGET_PATH"
+        
+        # Ensure target parent exists
+        if [ ! -d "$PARENT_TARGET" ]; then
+            if ! mkdir -p "$PARENT_TARGET" 2>/dev/null; then
+                log_message "Failed to create target parent directory"
                 debug_info
                 log_message "Attempting to create a temporary virtualenv instead"
                 create_temp_virtualenv
                 return $?
             fi
-        else
-            log_message "Valid virtualenv already exists at $VENV_PATH"
+        fi
+        
+        if python -m venv "$TARGET_PATH"; then
+            log_message "Successfully created virtualenv at target path"
+            
+            # Create the final symlink if needed
+            if [ ! -e "$VENV_PATH" ]; then
+                ln -s "$TARGET_PATH" "$VENV_PATH"
+                log_message "Created symlink: $VENV_PATH -> $TARGET_PATH"
+            fi
+            
+            # Generate activation script
+            cat > activate_venv.sh << EOF
+#!/bin/bash
+source "$VENV_PATH/bin/activate"
+EOF
+            chmod +x activate_venv.sh
             return 0
+        else
+            log_message "Failed to create virtualenv at resolved path"
+            debug_info
+            log_message "Attempting to create a temporary virtualenv instead"
+            create_temp_virtualenv
+            return $?
         fi
     fi
-
+    
+    # Normal creation - no symlinks involved
     log_message "Creating virtualenv at $VENV_PATH using venv module..."
     if python -m venv "$VENV_PATH"; then
         log_message "Successfully created virtualenv at $VENV_PATH"

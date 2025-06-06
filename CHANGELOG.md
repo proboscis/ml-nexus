@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Fixed critical symlink destruction issue in `ensure_pyenv_virtualenv.sh`
+  - Script was destroying symlinks created by MLPlatform, causing virtualenvs to be stored on limited job volume
+  - Added symlink detection and preservation logic to create virtualenvs at symlink targets
+  - Changed from `readlink -f` to `readlink` to avoid resolving all symlinks in path
+  - Ensures MLPlatform mount validation passes and virtualenvs are stored on NFS volumes
+  - Preserves existing behavior for non-symlink directories (backward compatible)
+
 ### Added
 - `doc/storage_resolver_architecture.md` - Comprehensive documentation for StorageResolver system
   - Architecture diagrams and class hierarchy using Mermaid
