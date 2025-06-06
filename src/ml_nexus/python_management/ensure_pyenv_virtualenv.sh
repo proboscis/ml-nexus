@@ -237,7 +237,12 @@ setup_virtualenv() {
                 fi
                 
                 # Create virtualenv at the symlink target
-                if python -m venv $venv_flags "$SYMLINK_TARGET"; then
+                local venv_output
+                local venv_exit_code
+                venv_output=$(python -m venv $venv_flags "$SYMLINK_TARGET" 2>&1)
+                venv_exit_code=$?
+                
+                if [ $venv_exit_code -eq 0 ]; then
                     log_message "Successfully created virtualenv at symlink target"
                     
                     # Verify symlink still points correctly
@@ -262,7 +267,8 @@ EOF
                         return 1
                     fi
                 else
-                    log_message "Failed to create virtualenv at symlink target"
+                    log_message "Failed to create virtualenv at symlink target (exit code: $venv_exit_code)"
+                    log_message "Error output: $venv_output"
                     debug_info
                     return 1
                 fi
@@ -320,7 +326,12 @@ EOF
             log_message "Target directory exists, using --clear flag"
         fi
         
-        if python -m venv $venv_flags "$TARGET_PATH"; then
+        local venv_output
+        local venv_exit_code
+        venv_output=$(python -m venv $venv_flags "$TARGET_PATH" 2>&1)
+        venv_exit_code=$?
+        
+        if [ $venv_exit_code -eq 0 ]; then
             log_message "Successfully created virtualenv at target path"
             
             # Create the final symlink if needed
@@ -344,7 +355,8 @@ EOF
                 return 1
             fi
         else
-            log_message "Failed to create virtualenv at resolved path"
+            log_message "Failed to create virtualenv at resolved path (exit code: $venv_exit_code)"
+            log_message "Error output: $venv_output"
             debug_info
             return 1
         fi
@@ -359,7 +371,13 @@ EOF
         log_message "Directory exists, using --clear flag for venv creation"
     fi
     
-    if python -m venv $venv_flags "$VENV_PATH"; then
+    # Capture stderr to see the actual error
+    local venv_output
+    local venv_exit_code
+    venv_output=$(python -m venv $venv_flags "$VENV_PATH" 2>&1)
+    venv_exit_code=$?
+    
+    if [ $venv_exit_code -eq 0 ]; then
         log_message "Successfully created virtualenv at $VENV_PATH"
         # Verify the virtualenv is valid
         if is_valid_virtualenv "$VENV_PATH"; then
@@ -377,7 +395,8 @@ EOF
             return 1
         fi
     else
-        log_message "Failed to create virtualenv with venv module"
+        log_message "Failed to create virtualenv with venv module (exit code: $venv_exit_code)"
+        log_message "Error output: $venv_output"
         debug_info
         return 1
     fi

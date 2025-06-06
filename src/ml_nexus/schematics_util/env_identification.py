@@ -238,6 +238,25 @@ async def a_prepare_setup_script_with_deps(
     match target.dirs[0].kind:
         case 'auto':
             schema = await a_identify_project_schema(repo)
+        case 'auto-embed':
+            # Auto-detect but use embedded dependencies
+            base_schema = await a_identify_project_schema(repo)
+            # Mark UV and requirements.txt projects for embedded handling
+            if isinstance(base_schema.schema, UVSchema):
+                return SetupScriptWithDeps(
+                    cxt=new_ProjectContext(repo=repo), 
+                    script="uv sync",
+                    env_deps=['uv-embedded']
+                )
+            elif isinstance(base_schema.schema, RequirementsTxtSchema):
+                return SetupScriptWithDeps(
+                    cxt=new_ProjectContext(repo=repo), 
+                    script="pip install -r requirements.txt",
+                    env_deps=['pyvenv', 'requirements.txt-embedded']
+                )
+            else:
+                # For other projects, fall back to regular handling
+                return await a_schema_to_setup_script_with_deps(base_schema, repo)
         case 'source':
             schema = IdentifiedSchema(schema=SourceSchema(type='source'), justification="directly set source")
         case 'uv':

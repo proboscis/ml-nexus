@@ -672,7 +672,8 @@ async def test_python_execution_requirements_auto(
     project = ProjectDef(dirs=[ProjectDir("test_requirements", kind="auto")])
     schematic = await schematics_universal(
         target=project,
-        base_image='python:3.11-slim'
+        base_image='python:3.11-slim',
+        python_version='3.11'  # Match the base image Python version
     )
     
     container_name = f"test_python_exec_req_{uuid.uuid4().hex[:8]}"

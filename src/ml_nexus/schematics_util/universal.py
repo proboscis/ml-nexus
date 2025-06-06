@@ -179,7 +179,7 @@ async def a_rye_component(
         ],
         init_script=[
             f"cd {project_workdir}",
-            f"rye sync",
+            "rye sync",
             f". {project_workdir}/.venv/bin/activate"
         ],
         mounts=caches,
@@ -203,7 +203,7 @@ async def rust_cargo_component(
 def ml_nexus_github_credential_component(logger) -> EnvComponent:
     # do nothing by default
     logger.warning(
-        f"No github credential is being used. override `ml_nexus_github_credential_component:EnvComponent` to override it.")
+        "No github credential is being used. override `ml_nexus_github_credential_component:EnvComponent` to override it.")
     return EnvComponent()
 
 
@@ -260,6 +260,100 @@ async def a_uv_component(
     )
 
 
+@injected
+async def a_uv_component_embedded(
+        a_macro_install_uv,
+        base_apt_packages_component,
+        rust_cargo_component,
+        ml_nexus_github_credential_component: EnvComponent,
+        storage_resolver: IStorageResolver,
+        /,
+        target: ProjectDef,
+        do_sync: bool = True,
+        isolate_env: bool = True,
+):
+    """
+    UV component with embedded dependencies using multi-stage Docker build.
+    This optimizes build caching by separating dependency installation from source code.
+    """
+    # Get the local project directory
+    local_project_dir = await storage_resolver.locate(target.dirs[0].id)
+    
+    # Cache mount for UV
+    uv_cache = CacheMountRequest('uv_cache', Path('/root/.cache/uv'))
+    
+    # Create macro for dependency caching stage
+    dependency_copy_macros = []
+    
+    # Copy only dependency files first
+    dependency_files = ['pyproject.toml', 'uv.lock', 'Cargo.toml', 'Cargo.lock']
+    for dep_file in dependency_files:
+        src_path = local_project_dir / dep_file
+        if src_path.exists():
+            dependency_copy_macros.append(
+                RCopy(src=src_path, dst=Path(target.default_working_dir) / dep_file)
+            )
+    
+    # Install dependencies only (with BuildKit cache mount)
+    dependency_install_macro = [
+        *dependency_copy_macros,
+        f"WORKDIR {target.default_working_dir}",
+        "RUN --mount=type=cache,target=/root/.cache/uv uv sync --no-install-project"
+    ]
+    
+    # Copy all project files (excluding common build artifacts)
+    project_copy_macro = [
+        # Use RsyncArgs to exclude unnecessary files
+        RsyncArgs(
+            src=local_project_dir,
+            dst=Path(target.default_working_dir),
+            excludes=[
+                '.venv', '__pycache__', '*.pyc', '.git', '.ruff_cache',
+                '.pytest_cache', 'build', 'dist', '*.egg-info',
+                '.mypy_cache', '.tox', '.coverage', 'htmlcov',
+                '.cache', 'node_modules', '.env', '.DS_Store'
+            ]
+        ),
+        # Final sync with full project
+        "RUN --mount=type=cache,target=/root/.cache/uv uv sync"
+    ]
+    
+    scripts = []
+    if isolate_env:
+        scripts += [
+            "RANDOM_ID=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1)",
+            "export UV_PROJECT_ENVIRONMENT=/root/.cache/uv_venv/$RANDOM_ID"
+        ]
+    else:
+        scripts += [
+            "export UV_PROJECT_ENVIRONMENT=/root/.cache/uv_venv/default"
+        ]
+    if do_sync:
+        scripts += [
+            "source $UV_PROJECT_ENVIRONMENT/bin/activate"
+        ]
+    
+    return EnvComponent(
+        installation_macro=[
+            await a_macro_install_uv(),
+            *dependency_install_macro,
+            *project_copy_macro
+        ],
+        dependencies=[
+            rust_cargo_component,
+            base_apt_packages_component,
+            ml_nexus_github_credential_component
+        ],
+        init_script=[
+            f"cd {target.default_working_dir}",
+            "source $HOME/.cargo/env",
+            "uv self update",
+            *scripts
+        ],
+        mounts=[uv_cache]
+    )
+
+
 test_a_build_schematics_from_component_uc: IProxy[ContainerSchematic] = a_build_schematics_from_component(
     base_image='ubuntu:20.04',
     components=Injected.list(
@@ -310,6 +404,81 @@ async def a_component_to_install_requirements_txt(
     )
 
 
+@injected
+async def a_component_to_install_requirements_txt_embedded(
+        storage_resolver: IStorageResolver,
+        logger,
+        /,
+        target: ProjectDef
+):
+    """
+    Requirements.txt component with embedded dependencies using multi-stage Docker build.
+    This optimizes build caching by separating dependency installation from source code.
+    """
+    local_path = await storage_resolver.locate(target.dirs[0].id)
+    requirements_txt_path = local_path / 'requirements.txt'
+    
+    # Read and parse requirements
+    requirements = requirements_txt_path.read_text()
+    packages = [r.split('#')[0].strip() for r in requirements.split('\n') if r.strip() and not r.strip().startswith('#')]
+    
+    # Handle xformers and other special packages separately
+    common_packages = []
+    special_packages = []
+    for p in packages:
+        if 'xformers' in p:
+            special_packages.append(p)
+        else:
+            common_packages.append(p)
+    
+    logger.info(f"common packages:{common_packages}")
+    logger.info(f"special packages:{special_packages}")
+    
+    # Create installation macros for multi-stage build
+    dependency_copy_macros = [
+        RCopy(src=requirements_txt_path, dst=Path(target.default_working_dir) / 'requirements.txt')
+    ]
+    
+    # Install dependencies in build stage with cache mount
+    common_packages_str = " ".join([f"'{pkg}'" for pkg in common_packages if pkg])
+    special_install_lines = "\n".join([f"RUN pip install {p} --no-dependencies" for p in special_packages])
+    
+    dependency_install_macro = [
+        *dependency_copy_macros,
+        f"WORKDIR {target.default_working_dir}",
+        f"RUN --mount=type=cache,target=/root/.cache/pip pip install {common_packages_str}" if common_packages else "",
+        special_install_lines if special_packages else ""
+    ]
+    # Remove empty strings from macro list
+    dependency_install_macro = [m for m in dependency_install_macro if m]
+    
+    # Copy all project files (excluding common build artifacts)
+    project_copy_macro = [
+        RsyncArgs(
+            src=local_path,
+            dst=Path(target.default_working_dir),
+            excludes=[
+                '__pycache__', '*.pyc', '.git', '.ruff_cache',
+                '.pytest_cache', 'build', 'dist', '*.egg-info',
+                '.mypy_cache', '.tox', '.coverage', 'htmlcov',
+                '.cache', 'node_modules', '.env', '.DS_Store',
+                'venv', 'env', '.venv'
+            ]
+        )
+    ]
+    
+    return EnvComponent(
+        installation_macro=[
+            *dependency_install_macro,
+            *project_copy_macro
+        ],
+        init_script=[
+            f"cd {target.default_working_dir}",
+            "echo 'requirements.txt dependencies pre-installed'"
+        ]
+    )
+
+
 class SchematicsUniversal(Protocol):
     async def __call__(self, target: ProjectDef, base_image: Optional[str] = None,
                        python_version: Optional[str] = None) -> ContainerSchematic:
@@ -327,6 +496,7 @@ async def schematics_universal(
         a_prepare_setup_script_with_deps,
         a_rye_component,
         a_uv_component,
+        a_uv_component_embedded,
         storage_resolver: IStorageResolver,
         ml_nexus_default_base_image: str,
         ml_nexus_default_python_version: str,
@@ -377,6 +547,10 @@ async def schematics_universal(
             case 'uv':
                 python_components.append(
                     await a_uv_component(target=target)
+                )
+            case 'uv-embedded':
+                python_components.append(
+                    await a_uv_component_embedded(target=target)
                 )
             case 'poetry':
                 raise NotImplementedError("poetry is not supported yet")
@@ -435,6 +609,36 @@ test_req_txt_docker = injected(PersistentDockerEnvFromSchematics)(
 test_req_txt_docker_run: IProxy = test_req_txt_docker.run_script(
     """
 ls -lah
+"""
+)
+
+# Test for auto-embed UV project
+test_auto_embed_project: IProxy = ProjectDef(
+    dirs=[
+        ProjectDir(
+            id='test/dummy_projects/test_uv',
+            kind='auto-embed'  # This will auto-detect UV and use embedded dependencies
+        )
+    ]
+)
+
+test_schematics_auto_embed: IProxy = schematics_universal(
+    target=test_auto_embed_project
+)
+
+test_auto_embed_docker: IProxy = injected(PersistentDockerEnvFromSchematics)(
+    project=test_auto_embed_project,
+    schematics=test_schematics_auto_embed,
+    docker_host='zeus',
+    container_name='test_auto_embed_docker'
+)
+
+test_auto_embed_docker_run: IProxy = test_auto_embed_docker.run_script(
+    """
+echo "Testing auto-embed UV project"
+ls -lah
+python --version
+uv --version
 """
 )
 
