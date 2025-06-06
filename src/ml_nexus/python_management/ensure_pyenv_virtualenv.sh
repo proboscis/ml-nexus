@@ -1,4 +1,5 @@
 #!/bin/bash
+echo "[SCRIPT VERSION] ensure_pyenv_virtualenv.sh Version: 2025-06-06-v2 (with improved error handling)"
 
 # This script ensures pyenv and a Python virtualenv are properly set up.
 # It returns proper error codes if virtualenv creation fails.

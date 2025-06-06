@@ -3,11 +3,15 @@ from dataclasses import field, dataclass
 from hashlib import sha256
 from itertools import chain
 from pathlib import Path
-from typing import Optional, List, Protocol
+from typing import Optional, List, Protocol, Callable, Sequence, TYPE_CHECKING
 
 from beartype import beartype
 from loguru import logger
 from pinjected import *
+
+if TYPE_CHECKING:
+    from ml_nexus.rsync_util import NewRsyncArgs
+    import loguru
 
 from ml_nexus import load_env_design
 from ml_nexus.docker.builder.builder_utils.rye_util import get_dummy_rye_venv
@@ -15,11 +19,9 @@ from ml_nexus.docker.builder.docker_env_with_schematics import DockerEnvFromSche
 from ml_nexus.docker.builder.macros.macro_defs import Macro, RCopy
 from ml_nexus.docker.builder.persistent import PersistentDockerEnvFromSchematics
 from ml_nexus.project_structure import ProjectDef, ProjectDir
-from ml_nexus.rsync_util import RsyncArgs
 from ml_nexus.schematics import MountRequest, CacheMountRequest, ContainerSchematic
 from ml_nexus.schematics_util.env_identification import SetupScriptWithDeps
 from ml_nexus.storage_resolver import IStorageResolver
-from typing import Sequence
 
 """
 We create a function that generates a schematics for universal project structure.
@@ -65,12 +67,12 @@ async def base_apt_packages_component():
 
 @injected
 async def a_pyenv_component(
-        macro_install_pyenv_virtualenv_installer,
-        base_apt_packages_component,
+        macro_install_pyenv_virtualenv_installer: Callable,
+        base_apt_packages_component: EnvComponent,
         /,
         target: ProjectDef,
         python_version: str = "3.12",
-):
+) -> EnvComponent:
     target_id = target.dirs[0].id
     venv_setup = await macro_install_pyenv_virtualenv_installer(
         venv_name=target_id,
@@ -93,14 +95,15 @@ async def a_pyenv_component(
 
 @injected
 async def a_pyenv_component_embedded(
-        macro_install_pyenv_virtualenv_installer,
-        base_apt_packages_component,
+        macro_install_pyenv_virtualenv_installer: Callable,
+        base_apt_packages_component: EnvComponent,
         storage_resolver: IStorageResolver,
-        logger,
+        new_RsyncArgs: 'NewRsyncArgs',
+        logger: 'loguru.Logger',
         /,
         target: ProjectDef,
         python_version: str = "3.12",
-):
+) -> EnvComponent:
     """
     Pyenv component with embedded dependencies using multi-stage Docker build.
     This optimizes build caching by separating dependency installation from source code.
@@ -141,7 +144,7 @@ async def a_pyenv_component_embedded(
     
     # Copy all project files (excluding common build artifacts)
     project_copy_macro = [
-        RsyncArgs(
+        new_RsyncArgs(
             src=local_project_dir,
             dst=Path(target.default_working_dir),
             excludes=[
@@ -246,13 +249,13 @@ test_a_build_schematics_from_component: IProxy = a_build_schematics_from_compone
 
 @injected
 async def a_rye_component(
-        docker__install_rye,
-        base_apt_packages_component,
-        ml_nexus_github_credential_component,
+        docker__install_rye: Callable,
+        base_apt_packages_component: EnvComponent,
+        ml_nexus_github_credential_component: EnvComponent,
         /,
         project_workdir: Path,
         local_project_dir: Path
-):
+) -> EnvComponent:
     caches = [
         CacheMountRequest(
             'uv_cache', Path('/root/.cache/uv')
@@ -352,16 +355,17 @@ async def a_uv_component(
 
 @injected
 async def a_uv_component_embedded(
-        a_macro_install_uv,
-        base_apt_packages_component,
-        rust_cargo_component,
+        a_macro_install_uv: Callable,
+        base_apt_packages_component: EnvComponent,
+        rust_cargo_component: EnvComponent,
         ml_nexus_github_credential_component: EnvComponent,
         storage_resolver: IStorageResolver,
+        new_RsyncArgs: 'NewRsyncArgs',
         /,
         target: ProjectDef,
         do_sync: bool = True,
         isolate_env: bool = True,
-):
+) -> EnvComponent:
     """
     UV component with embedded dependencies using multi-stage Docker build.
     This optimizes build caching by separating dependency installation from source code.
@@ -394,7 +398,7 @@ async def a_uv_component_embedded(
     # Copy all project files (excluding common build artifacts)
     project_copy_macro = [
         # Use RsyncArgs to exclude unnecessary files
-        RsyncArgs(
+        new_RsyncArgs(
             src=local_project_dir,
             dst=Path(target.default_working_dir),
             excludes=[
@@ -497,10 +501,11 @@ async def a_component_to_install_requirements_txt(
 @injected
 async def a_component_to_install_requirements_txt_embedded(
         storage_resolver: IStorageResolver,
-        logger,
+        new_RsyncArgs: 'NewRsyncArgs',
+        logger: 'loguru.Logger',
         /,
         target: ProjectDef
-):
+) -> EnvComponent:
     """
     Requirements.txt component with embedded dependencies using multi-stage Docker build.
     This optimizes build caching by separating dependency installation from source code.
@@ -544,7 +549,7 @@ async def a_component_to_install_requirements_txt_embedded(
     
     # Copy all project files (excluding common build artifacts)
     project_copy_macro = [
-        RsyncArgs(
+        new_RsyncArgs(
             src=local_path,
             dst=Path(target.default_working_dir),
             excludes=[
