@@ -128,13 +128,17 @@ async def a_pyenv_component_embedded(
     dependency_install_macro = []
     if requirements_path.exists():
         # For requirements.txt, we can install dependencies before copying source
+        # Escape the command properly for shell execution
+        escaped_command = (
+            venv_setup.command.strip().replace("'", "'\\''").replace("\n", " && ")
+        )
         dependency_install_macro = [
             RCopy(
                 src=requirements_path,
                 dst=Path(target.default_working_dir) / "requirements.txt",
             ),
             f"WORKDIR {target.default_working_dir}",
-            f"RUN --mount=type=cache,target=/root/pip_cache/pip {venv_setup.command} && pip install -r requirements.txt",
+            f"RUN --mount=type=cache,target=/root/pip_cache/pip sh -c '{escaped_command} && pip install -r requirements.txt'",
         ]
 
     # Copy all project files (excluding common build artifacts)
@@ -170,13 +174,17 @@ async def a_pyenv_component_embedded(
     # If setup.py exists, install it after source code is copied
     final_install = []
     if setup_py_path.exists():
+        # Escape the command properly for shell execution
+        escaped_command = (
+            venv_setup.command.strip().replace("'", "'\\''").replace("\n", " && ")
+        )
         final_install.append(
-            f"RUN --mount=type=cache,target=/root/pip_cache/pip {venv_setup.command} && cd {target.default_working_dir} && pip install -e ."
+            f"RUN --mount=type=cache,target=/root/pip_cache/pip sh -c '{escaped_command} && cd {target.default_working_dir} && pip install -e .'"
         )
 
     return EnvComponent(
         installation_macro=[
-            venv_setup.macro,
+            *venv_setup.macro,  # Unpack the list of macros
             *dependency_install_macro,
             *project_copy_macro,
             *final_install,

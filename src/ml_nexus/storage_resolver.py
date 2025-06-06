@@ -11,6 +11,71 @@ from pydantic import BaseModel
 from tqdm import tqdm
 
 
+def _create_storage_error_message(
+    resolver_type: str,
+    requested_id: str,
+    available_ids: list[str],
+    resolver_info: dict[str, str] | None = None,
+) -> str:
+    """Create a detailed error message for storage resolution failures."""
+    available_str = "\n  ".join(sorted(available_ids)[:20])
+    if len(available_ids) > 20:
+        available_str += f"\n  ... and {len(available_ids) - 20} more"
+
+    message = f"""
+StorageResolver Error: Cannot locate project/resource with ID '{requested_id}'
+
+Resolver Type: {resolver_type}
+{f"Resolver Info: {resolver_info}" if resolver_info else ""}
+
+Available IDs ({len(available_ids)}):
+  {available_str if available_ids else "No IDs available - resolver may not be synced or directories may be empty"}
+
+How to fix this issue:
+
+1. Check if the ID exists in your configured directories
+2. Ensure the storage resolver is properly configured
+
+Configuration options:
+
+a) Configure source/resource roots in your __pinjected__.py:
+   ```python
+   from pathlib import Path
+   from pinjected import design
+   from ml_nexus import load_env_design
+   
+   __design__ = load_env_design + design(
+       ml_nexus_source_root=Path("~/my_sources").expanduser(),
+       ml_nexus_resource_root=Path("~/my_resources").expanduser(),
+   )
+   ```
+
+b) Or override the entire storage resolver:
+   ```python
+   from ml_nexus.storage_resolver import StaticStorageResolver, DirectoryStorageResolver
+   
+   my_resolver = StaticStorageResolver({{
+       "{requested_id}": Path("/path/to/{requested_id}"),
+       # Add more mappings...
+   }})
+   
+   __design__ = load_env_design + design(
+       storage_resolver=my_resolver
+   )
+   ```
+
+c) For testing, use StaticStorageResolver:
+   ```python
+   test_resolver = StaticStorageResolver({{
+       "test_project": Path("/test/path"),
+   }})
+   ```
+
+See documentation: doc/storage_resolver_architecture.md
+"""
+    return message
+
+
 class IStorageResolver(ABC):
     @abc.abstractmethod
     async def sync(self):
@@ -43,13 +108,35 @@ class CombinedStorageResolver(IStorageResolver):
     async def sync(self):
         await asyncio.gather(*[r.sync() for r in self.resolvers])
 
+    def _collect_resolver_info(self) -> tuple[list[str], dict[str, str]]:
+        """Collect available IDs and resolver information for error reporting."""
+        all_available_ids = []
+        resolver_infos = []
+
+        for resolver in self.resolvers:
+            if hasattr(resolver, "id_to_path"):
+                all_available_ids.extend(resolver.id_to_path.keys())
+
+            resolver_type = type(resolver).__name__
+            if hasattr(resolver, "__class__"):
+                # This will be checked after the class definitions
+                resolver_infos.append(resolver_type)
+
+        return all_available_ids, {"Combined resolvers": ", ".join(resolver_infos)}
+
     async def locate(self, id: str) -> Path:
         for resolver in self.resolvers:
             try:
                 return await resolver.locate(id)
             except KeyError:
                 pass
-        raise KeyError(f"could not locate {id}")
+
+        all_available_ids, resolver_info = self._collect_resolver_info()
+        raise KeyError(
+            _create_storage_error_message(
+                "CombinedStorageResolver", id, all_available_ids, resolver_info
+            )
+        )
 
 
 class StaticStorageResolver(IStorageResolver):
@@ -64,7 +151,17 @@ class StaticStorageResolver(IStorageResolver):
         pass
 
     async def locate(self, id: str) -> Path:
-        return self.id_to_path[id]
+        if id in self.id_to_path:
+            return self.id_to_path[id]
+
+        raise KeyError(
+            _create_storage_error_message(
+                "StaticStorageResolver",
+                id,
+                list(self.id_to_path.keys()),
+                {"Static mappings": f"{len(self.id_to_path)} entries"},
+            )
+        )
 
 
 @dataclass
@@ -83,7 +180,18 @@ class DirectoryStorageResolver(IStorageResolver):
         if not self.synchronized:
             await self.sync()
             self.synchronized = True
-        return self.id_to_path[id]
+
+        if id in self.id_to_path:
+            return self.id_to_path[id]
+
+        raise KeyError(
+            _create_storage_error_message(
+                "DirectoryStorageResolver",
+                id,
+                list(self.id_to_path.keys()),
+                {"Root directory": str(self.root)},
+            )
+        )
 
     async def sync(self):
         for sub_dir in tqdm(self.root.iterdir(), f"scanning {self.root}"):
@@ -126,7 +234,22 @@ class YamlStorageResolver(IStorageResolver):
         if not self.synchronized:
             await self.sync()
             self.synchronized = True
-        return self.id_to_path[id]
+
+        if id in self.id_to_path:
+            return self.id_to_path[id]
+
+        root_paths_str = ", ".join(str(p) for p in self.root_paths)
+        raise KeyError(
+            _create_storage_error_message(
+                "YamlStorageResolver",
+                id,
+                list(self.id_to_path.keys()),
+                {
+                    "Root paths": root_paths_str,
+                    "Note": "Looks for .storage_info.yaml files",
+                },
+            )
+        )
 
 
 @instance

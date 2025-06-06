@@ -57,14 +57,23 @@ class DockerEnvFromSchematics(IScriptRunner):
 
     async def _mkdir(self, host_dst):
         async with self.sem:
-            await self._a_system(f"ssh {self.docker_host} mkdir -p {host_dst}")
+            if self.docker_host and self.docker_host not in [
+                "",
+                "localhost",
+                "127.0.0.1",
+            ]:
+                await self._a_system(f"ssh {self.docker_host} mkdir -p {host_dst}")
+            else:
+                await self._a_system(f"mkdir -p {host_dst}")
 
     async def _rsync_mount(self, source, host_dst, mount_point, excludes):
         self._logger.info(f"Syncing {source} to {host_dst}, {mount_point}")
         await self._mkdir(host_dst)
         rsync = self._new_RsyncArgs(
             src=source,
-            dst=RsyncLocation(host_dst, host=self.docker_host),
+            dst=RsyncLocation(
+                host_dst, host=self.docker_host if self.docker_host else "localhost"
+            ),
             excludes=excludes,
         )
         await rsync.run()
@@ -166,7 +175,7 @@ class DockerEnvFromSchematics(IScriptRunner):
             mounts.append(await task)
         return mounts
 
-    async def sync_direct(self, excludes, mount_point, source, unique_id: str = None):
+    async def sync_direct(self, excludes, mount_point, source, unique_id: str | None = None):
         if unique_id is not None:
             hash_name = hashlib.sha256(str(unique_id).encode()).hexdigest()[:32]
         else:
