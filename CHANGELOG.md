@@ -26,8 +26,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Test IProxy definitions for UV auto-embed projects
   - Test IProxy definitions for requirements.txt auto-embed projects  
   - Test IProxy definitions for pyvenv-embed with both requirements.txt and setup.py
+- **Enhanced pyenv installation robustness in `ensure_pyenv_virtualenv.sh`**
+  - Added support for systems with only `python3` command (no `python`)
+  - Creates python symlink to python3 when needed
+  - Improved handling of corrupted pyenv installations
+  - Better error handling and recovery when pyenv directory exists but binary is missing
+  - Added verification that correct Python version is activated after installation
+  - Enhanced debugging with more detailed error messages
 
 ### Fixed
+- **Fixed missing dependency injection in `env_identification.py`**
+  - Added missing `new_ProjectContext` parameter to `a_prepare_setup_script_with_deps`
+  - Ensures proper dependency injection for pyvenv-embed projects
 - Fixed critical symlink destruction issue in `ensure_pyenv_virtualenv.sh`
   - Script was destroying symlinks created by MLPlatform, causing virtualenvs to be stored on limited job volume
   - Added symlink detection and preservation logic to create virtualenvs at symlink targets

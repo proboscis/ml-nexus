@@ -231,6 +231,7 @@ async def a_prepare_setup_script_with_deps(
         a_identify_project_schema,
         a_schema_to_setup_script_with_deps,
         storage_resolver,
+        new_ProjectContext,
         /,
         target: ProjectDef,
 ):

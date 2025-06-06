@@ -38,8 +38,14 @@ debug_info() {
     log_message "VENV_PATH: $VENV_PATH"
 
     # Check Python and venv
-    log_message "Python executable: $(which python || echo 'Not found')"
-    log_message "Python version: $(python --version 2>&1 || echo 'Failed to get version')"
+    log_message "Python executable: $(which python 2>/dev/null || which python3 2>/dev/null || echo 'Not found')"
+    if command_exists python; then
+        log_message "Python version: $(python --version 2>&1 || echo 'Failed to get version')"
+    elif command_exists python3; then
+        log_message "Python3 version: $(python3 --version 2>&1 || echo 'Failed to get version')"
+    else
+        log_message "Python version: No python or python3 found"
+    fi
 
     # Check directory permissions
     log_message "Parent directory for VENV_PATH: $(dirname "$VENV_PATH")"
@@ -79,6 +85,29 @@ is_git_repo() {
     git -C "$1" rev-parse --is-inside-work-tree >/dev/null 2>&1
 }
 
+# Ensure python command exists (for systems that only have python3)
+ensure_python_command() {
+    if ! command_exists python; then
+        if command_exists python3; then
+            log_message "Creating python symlink to python3"
+            # Try different locations for the symlink
+            if [ -w "/usr/local/bin" ]; then
+                ln -sf $(which python3) /usr/local/bin/python 2>/dev/null || true
+            elif [ -w "/usr/bin" ]; then
+                ln -sf $(which python3) /usr/bin/python 2>/dev/null || true
+            else
+                # Try creating in a PATH directory we can write to
+                local bin_dir="$HOME/.local/bin"
+                mkdir -p "$bin_dir" 2>/dev/null || true
+                if [ -d "$bin_dir" ]; then
+                    ln -sf $(which python3) "$bin_dir/python" 2>/dev/null || true
+                    export PATH="$bin_dir:$PATH"
+                fi
+            fi
+        fi
+    fi
+}
+
 # Initialize pyenv environment
 init_pyenv_env() {
     export PYENV_ROOT="$PYENV_ROOT"
@@ -115,26 +144,28 @@ install_pyenv() {
         return 0
     fi
 
-    # If PYENV_ROOT exists but no pyenv binary, handle the git repo setup
+    # If PYENV_ROOT exists but no pyenv binary, we need to reinstall
     if [ -d "$PYENV_ROOT" ]; then
+        log_message "PYENV_ROOT exists at $PYENV_ROOT, checking if it's valid..."
         if ! is_git_repo "$PYENV_ROOT"; then
-            log_message "PYENV_ROOT exists but is not a git repository."
-            # Try to initialize it as a git repo and add pyenv remote
-            if git init "$PYENV_ROOT" && \
-               cd "$PYENV_ROOT" && \
-               git config --global --add safe.directory "$PYENV_ROOT" && \
-               git remote add origin "$PYENV_GIT_URL" && \
-               git fetch && \
-               git reset --hard origin/master; then
-                log_message "Successfully initialized pyenv repository"
-                cd - > /dev/null
-            else
-                log_message "Failed to initialize pyenv repository"
-                return 1
-            fi
-        else
-            # Existing git repo - make sure it's trusted
+            log_message "PYENV_ROOT exists but is not a git repository. Removing and reinstalling..."
+            rm -rf "$PYENV_ROOT" 2>/dev/null || {
+                log_message "Failed to remove invalid PYENV_ROOT, trying to move it"
+                mv "$PYENV_ROOT" "${PYENV_ROOT}_old_$(date +%s)" 2>/dev/null || {
+                    log_message "Failed to move PYENV_ROOT"
+                    return 1
+                }
+            }
+            log_message "Installing pyenv fresh..."
+            git clone "$PYENV_GIT_URL" "$PYENV_ROOT"
             git config --global --add safe.directory "$PYENV_ROOT" 2>/dev/null || true
+        else
+            # Existing git repo - make sure it's trusted and has the pyenv binary
+            git config --global --add safe.directory "$PYENV_ROOT" 2>/dev/null || true
+            # Pull latest to ensure we have all files
+            log_message "Updating existing pyenv installation..."
+            cd "$PYENV_ROOT" && git pull origin master 2>/dev/null || true
+            cd - > /dev/null
         fi
     else
         log_message "Installing pyenv..."
@@ -155,11 +186,24 @@ install_python() {
     # Redirect stderr to avoid git warnings that are already handled
     if ! pyenv versions 2>/dev/null | grep -q "$PYTHON_VERSION"; then
         log_message "Installing Python $PYTHON_VERSION..."
-        pyenv install "$PYTHON_VERSION" 2>&1 | grep -v "detected dubious ownership" || true
+        # Install Python and check if it succeeded
+        if ! pyenv install "$PYTHON_VERSION" 2>&1 | grep -v "detected dubious ownership"; then
+            log_message "Failed to install Python $PYTHON_VERSION"
+            return 1
+        fi
     else
         log_message "Python $PYTHON_VERSION already installed"
     fi
+    
+    # Set global Python version and verify it was set correctly
     pyenv global "$PYTHON_VERSION" 2>&1 | grep -v "detected dubious ownership" || true
+    
+    # Verify the correct Python version is now active
+    local active_version=$(pyenv version-name 2>/dev/null || echo "unknown")
+    if [ "$active_version" != "$PYTHON_VERSION" ]; then
+        log_message "ERROR: Expected Python $PYTHON_VERSION but got $active_version"
+        return 1
+    fi
 }
 
 # Function to verify if a directory is a valid virtualenv
@@ -174,16 +218,24 @@ is_valid_virtualenv() {
     
     # Test if we can actually use the virtualenv by activating it and running Python
     log_message "Testing if virtualenv at $venv_dir is usable..."
-    if (
-        # Run in a subshell to avoid affecting the current environment
-        source "$venv_dir/bin/activate" 2>/dev/null && \
-        python --version >/dev/null 2>&1 && \
-        python -c "import sys; sys.exit(0)" 2>/dev/null
-    ); then
+    
+    # Test activation and Python usage with detailed error logging
+    local test_output
+    local test_exit_code
+    test_output=$(
+        source "$venv_dir/bin/activate" 2>&1 && \
+        python --version 2>&1 && \
+        python -c "import sys; print(f'Python executable: {sys.executable}'); sys.exit(0)" 2>&1
+    )
+    test_exit_code=$?
+    
+    if [ $test_exit_code -eq 0 ]; then
         log_message "Virtualenv is valid and usable"
         return 0
     else
         log_message "Virtualenv exists but cannot be activated or used"
+        log_message "Test output: $test_output"
+        log_message "Test exit code: $test_exit_code"
         return 1
     fi
 }
@@ -399,6 +451,9 @@ EOF
 # Main execution
 main() {
     log_message "Starting Python environment setup..."
+    
+    # Ensure python command exists early (for systems with only python3)
+    ensure_python_command
     
     # Set git safe directory early to prevent ownership warnings
     if [ -d "$PYENV_ROOT/.git" ]; then
