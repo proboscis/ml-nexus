@@ -16,6 +16,7 @@ dependencies = [
     "beartype",
     "pinjected-openai @ git+https://github.com/proboscis/pinjected.git#subdirectory=packages/openai_support",
     "tomlkit>=0.13.2",
+    "pre-commit>=4.2.0",
 ]
 readme = "README.md"
 requires-python = ">= 3.10"
@@ -35,3 +36,107 @@ allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ml_nexus"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 88
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "venv",
+]
+
+lint.select = [
+    "E",      # pyflakes/flake8 errors
+    "F",      # pyflakes errors
+    "W",      # pyflakes warnings
+    "C901",   # McCabe complexity errors
+    "PLR",    # pylint‐style design checks
+    "RUF",    # Ruff‐specific rules
+    "SIM",    # Code similarity checks
+]
+
+lint.ignore = [
+    "F403", # star import used
+    "F405", # name may be undefined, or defined from star import
+    "F407", # undefined forward reference
+    "F811", # redefinition of unused name
+    "F541", # f-string missing placeholders
+    "E261", # at least two spaces before inline comment
+    "E262", # inline comment should start with '# '
+    "E265", # block comment should start with '# '
+    "E266", # too many leading '#' for block comment
+    "F722", # unexpected token at end of expression
+    "E501", # line too long
+    "W291", # trailing whitespace
+    "W293", # blank line contains whitespace
+    "PLR2004", # magic number
+    "PLR0913", # Too many arguments in function definition: I want this but not working for @injected functions...
+    "RUF005", # collection concatenation (not correct for pinjected)
+    "SIM108", # tenary if-else. but makes it hard to read.
+    "RUF003", # commenting for full-character parenthesis
+    "RUF002", # commenting for full-character brackets
+    "RUF001", # Full character comment
+    "COM812", # trailing comma
+    "S101", # use of assert
+    "ERA001", # Commented out code
+    "C408", # dict() to {}
+    "TD002", # Missing TODO author
+    "RET504", # unnecessary asignment before return
+    "D100", # Missing docstring in public module
+    "D101", # missing doc in public class
+    "D102", # Missing docstring in public method
+    "D103", # Missing docstring in public method,
+    "D107", # Missing doc
+    "D200", # multiline doc stuff
+    "D104", # Missing doc
+    "D415", # Doc
+    "D105", # Missing doc
+    "D400", # doc
+    "D205", # require blank line
+    "ANN001", # type annotation for func argument
+    "EM102", # f-string in exception
+    "N806", # enforce lower case for variable
+    "TRY003", # exception with dynamic message
+    "G004", # fstring in logger
+    "D", # all doc?
+    "FBT001", # positional boolean flag is disallowed.
+    "FIX002",
+    "E731",
+    "RUF100",
+    "W292", # no newline at end of file Do we need this?
+]
+
+# Cyclomatic complexity → C901
+[tool.ruff.lint.mccabe]
+# Flag C901 errors whenever a function's cyclomatic complexity exceeds 6
+max-complexity = 6
+[tool.ruff.lint.pylint]
+# 1. Too many arguments → R0913
+max-args = 5
+# 2. Too many local variables → R0914
+max-locals = 5
+# 3. Too many branches → R0912
+max-branches = 6
+# 4. Too many statements → R0915
+max-statements = 40
+# 5. Too many nested blocks → R0916
+max-nested-blocks = 2

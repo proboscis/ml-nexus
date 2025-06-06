@@ -21,9 +21,11 @@ design = load_env_design()
 graph = design.to_graph()
 
 # Get the context value
-context = graph.get('ml_nexus_docker_build_context')
+context = graph.get("ml_nexus_docker_build_context")
 
-print(f"Environment variable ML_NEXUS_DOCKER_BUILD_CONTEXT: {os.environ.get('ML_NEXUS_DOCKER_BUILD_CONTEXT')}")
+print(
+    f"Environment variable ML_NEXUS_DOCKER_BUILD_CONTEXT: {os.environ.get('ML_NEXUS_DOCKER_BUILD_CONTEXT')}"
+)
 print(f"Loaded context value: {context}")
 
 # Verify it matches

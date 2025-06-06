@@ -3,17 +3,16 @@
 import os
 import subprocess
 import tempfile
-from pathlib import Path
 
 
 def test_docker_context_in_build():
     """Test that docker build commands use the configured context"""
-    
+
     # Set up a test context
     os.environ["ML_NEXUS_DOCKER_BUILD_CONTEXT"] = "test-context"
-    
+
     # Create a simple test that uses pinjected to check docker commands
-    test_script = '''
+    test_script = """
 from pinjected import IProxy, injected
 from ml_nexus.docker.builder.builder_utils.building import a_build_docker
 
@@ -64,30 +63,32 @@ async def test_build():
 import asyncio
 asyncio.run(test_build())
 print("✓ Docker context test passed!")
-'''
+"""
 
     # Write test script to temporary file
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
         f.write(test_script)
         test_file = f.name
-    
+
     try:
         # Run the test script
         result = subprocess.run(
-            ['uv', 'run', 'python', test_file],
+            ["uv", "run", "python", test_file],
             capture_output=True,
             text=True,
-            cwd=os.path.dirname(os.path.abspath(__file__))
+            cwd=os.path.dirname(os.path.abspath(__file__)),
         )
-        
+
         print("STDOUT:", result.stdout)
         if result.stderr:
             print("STDERR:", result.stderr)
-        
+
         # Check result
-        assert result.returncode == 0, f"Test failed with return code {result.returncode}"
+        assert result.returncode == 0, (
+            f"Test failed with return code {result.returncode}"
+        )
         assert "✓ Docker context test passed!" in result.stdout
-        
+
     finally:
         # Clean up
         os.unlink(test_file)
@@ -97,11 +98,11 @@ print("✓ Docker context test passed!")
 
 def test_docker_client_context():
     """Test that LocalDockerClient uses context"""
-    
+
     # Set context
     os.environ["ML_NEXUS_DOCKER_BUILD_CONTEXT"] = "client-test-context"
-    
-    test_script = '''
+
+    test_script = """
 from ml_nexus.docker.client import LocalDockerClient
 import asyncio
 
@@ -114,25 +115,25 @@ client = LocalDockerClient(
 
 # Test commands
 asyncio.run(client.push_image("test:latest"))
-'''
+"""
 
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
         f.write(test_script)
         test_file = f.name
-    
+
     try:
         result = subprocess.run(
-            ['uv', 'run', 'python', test_file],
+            ["uv", "run", "python", test_file],
             capture_output=True,
             text=True,
-            cwd=os.path.dirname(os.path.abspath(__file__))
+            cwd=os.path.dirname(os.path.abspath(__file__)),
         )
-        
+
         print("Client test output:", result.stdout)
-        
+
         # Check that context is used
         assert "docker --context client-test-context push" in result.stdout
-        
+
     finally:
         os.unlink(test_file)
         if "ML_NEXUS_DOCKER_BUILD_CONTEXT" in os.environ:
@@ -141,11 +142,11 @@ asyncio.run(client.push_image("test:latest"))
 
 if __name__ == "__main__":
     print("Testing docker context usage...")
-    
+
     print("\n1. Testing docker build/push with context:")
     test_docker_context_in_build()
-    
+
     print("\n2. Testing LocalDockerClient with context:")
     test_docker_client_context()
-    
+
     print("\n✅ All tests passed!")

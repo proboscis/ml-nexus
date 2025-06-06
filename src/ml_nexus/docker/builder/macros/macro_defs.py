@@ -26,5 +26,3 @@ CodeBuilder = Callable[[BuildMacroContext], Awaitable[PureMacro]]
 _Macro = str | Block | RCopy | RsyncArgs
 _MacroImpl = _Macro | CodeBuilder
 Macro = _MacroImpl | list[_MacroImpl]
-
-

@@ -14,20 +14,17 @@ from loguru import logger
 
 # Setup test environment
 TEST_PROJECT_ROOT = Path(__file__).parent / "dummy_projects"
-test_storage_resolver = StaticStorageResolver({
-    "test_uv": TEST_PROJECT_ROOT / "test_uv",
-    "test_rye": TEST_PROJECT_ROOT / "test_rye",
-})
+test_storage_resolver = StaticStorageResolver(
+    {
+        "test_uv": TEST_PROJECT_ROOT / "test_uv",
+        "test_rye": TEST_PROJECT_ROOT / "test_rye",
+    }
+)
 
 # Test design configuration
-test_design = design(
-    storage_resolver=test_storage_resolver,
-    logger=logger
-)
+test_design = design(storage_resolver=test_storage_resolver, logger=logger)
 
-__meta_design__ = design(
-    overrides=load_env_design + test_design
-)
+__meta_design__ = design(overrides=load_env_design + test_design)
 
 
 # ===== Test 1: UV project plugin =====
@@ -35,18 +32,17 @@ __meta_design__ = design(
 async def test_plugin_uv(schematics_universal, logger):
     """Test UV project via plugin"""
     logger.info("Testing UV project plugin")
-    
+
     project = ProjectDef(dirs=[ProjectDir("test_uv", kind="uv")])
-    
+
     schematic = await schematics_universal(
-        target=project,
-        base_image='python:3.11-slim'
+        target=project, base_image="python:3.11-slim"
     )
-    
+
     builder = schematic.builder
-    scripts_str = ' '.join(builder.scripts)
-    assert 'uv sync' in scripts_str, "UV sync command not found"
-    
+    scripts_str = " ".join(builder.scripts)
+    assert "uv sync" in scripts_str, "UV sync command not found"
+
     logger.info("✅ Plugin UV test passed")
 
 
@@ -55,18 +51,17 @@ async def test_plugin_uv(schematics_universal, logger):
 async def test_plugin_rye(schematics_universal, logger):
     """Test RYE project via plugin"""
     logger.info("Testing RYE project plugin")
-    
+
     project = ProjectDef(dirs=[ProjectDir("test_rye", kind="rye")])
-    
+
     schematic = await schematics_universal(
-        target=project,
-        base_image='python:3.11-slim'
+        target=project, base_image="python:3.11-slim"
     )
-    
+
     builder = schematic.builder
-    scripts_str = ' '.join(builder.scripts)
-    assert 'rye sync' in scripts_str, "Rye sync command not found"
-    
+    scripts_str = " ".join(builder.scripts)
+    assert "rye sync" in scripts_str, "Rye sync command not found"
+
     logger.info("✅ Plugin RYE test passed")
 
 

@@ -16,22 +16,19 @@ from loguru import logger
 TEST_PROJECT_ROOT = Path(__file__).parent / "dummy_projects"
 
 # Configure test-specific dependencies
-test_storage_resolver = StaticStorageResolver({
-    "test_uv": TEST_PROJECT_ROOT / "test_uv",
-    "test_rye": TEST_PROJECT_ROOT / "test_rye",
-    "test_source": TEST_PROJECT_ROOT / "test_source",
-})
+test_storage_resolver = StaticStorageResolver(
+    {
+        "test_uv": TEST_PROJECT_ROOT / "test_uv",
+        "test_rye": TEST_PROJECT_ROOT / "test_rye",
+        "test_source": TEST_PROJECT_ROOT / "test_source",
+    }
+)
 
 # Test design configuration
-test_design = design(
-    storage_resolver=test_storage_resolver,
-    logger=logger
-)
+test_design = design(storage_resolver=test_storage_resolver, logger=logger)
 
 # Module design configuration
-__meta_design__ = design(
-    overrides=load_env_design + test_design
-)
+__meta_design__ = design(overrides=load_env_design + test_design)
 
 
 # ===== Test 1: Async test example =====
@@ -40,23 +37,23 @@ async def test_uv_configuration(schematics_universal, logger):
     """Test UV project configuration generates correct dockerfile components"""
     # Arrange
     project = ProjectDef(dirs=[ProjectDir("test_uv", kind="uv")])
-    
+
     # Act
     schematic = await schematics_universal(
-        target=project,
-        base_image='python:3.11-slim'
+        target=project, base_image="python:3.11-slim"
     )
-    
+
     # Assert
     builder = schematic.builder
-    scripts_str = ' '.join(builder.scripts)
-    
-    assert 'uv sync' in scripts_str, "UV sync command not found in scripts"
-    assert len(builder.macros) > 5, f"Expected more than 5 macros, got {len(builder.macros)}"
-    assert builder.base_image == 'python:3.11-slim', "Base image mismatch"
-    
-    logger.info(f"✅ UV configuration test passed with {len(builder.scripts)} scripts")
+    scripts_str = " ".join(builder.scripts)
 
+    assert "uv sync" in scripts_str, "UV sync command not found in scripts"
+    assert len(builder.macros) > 5, (
+        f"Expected more than 5 macros, got {len(builder.macros)}"
+    )
+    assert builder.base_image == "python:3.11-slim", "Base image mismatch"
+
+    logger.info(f"✅ UV configuration test passed with {len(builder.scripts)} scripts")
 
 
 # ===== Test 2: Storage resolver test example =====
@@ -64,18 +61,17 @@ async def test_uv_configuration(schematics_universal, logger):
 async def test_storage_resolver(storage_resolver, logger):
     """Test that our custom storage resolver works correctly"""
     # Test locate method exists
-    assert hasattr(storage_resolver, 'locate'), "Storage resolver missing locate method"
-    
+    assert hasattr(storage_resolver, "locate"), "Storage resolver missing locate method"
+
     # Test we can locate our test projects
     uv_path = await storage_resolver.locate("test_uv")
     assert uv_path.exists(), f"test_uv project path does not exist: {uv_path}"
     assert (uv_path / "pyproject.toml").exists(), "test_uv missing pyproject.toml"
-    
+
     rye_path = await storage_resolver.locate("test_rye")
     assert rye_path.exists(), f"test_rye project path does not exist: {rye_path}"
-    
-    logger.info("✅ Storage resolver test passed")
 
+    logger.info("✅ Storage resolver test passed")
 
 
 # ===== Test 3: Parameterized test example =====
@@ -87,28 +83,30 @@ async def test_multiple_project_kinds(schematics_universal, logger):
         ("test_rye", "rye", "rye sync"),
         ("test_source", "source", None),  # Source projects have no sync command
     ]
-    
+
     for project_id, kind, expected_command in test_cases:
         logger.info(f"Testing {kind} project: {project_id}")
-        
+
         project = ProjectDef(dirs=[ProjectDir(project_id, kind=kind)])
-        base_image = 'python:3.11-slim' if kind != 'source' else 'ubuntu:22.04'
-        
-        schematic = await schematics_universal(
-            target=project,
-            base_image=base_image
-        )
-        
-        scripts_str = ' '.join(schematic.builder.scripts)
-        
+        base_image = "python:3.11-slim" if kind != "source" else "ubuntu:22.04"
+
+        schematic = await schematics_universal(target=project, base_image=base_image)
+
+        scripts_str = " ".join(schematic.builder.scripts)
+
         if expected_command:
-            assert expected_command in scripts_str, f"{expected_command} not found for {kind}"
+            assert expected_command in scripts_str, (
+                f"{expected_command} not found for {kind}"
+            )
         else:
-            assert len(schematic.builder.scripts) == 0, "Source project should have no scripts"
-        
+            assert len(schematic.builder.scripts) == 0, (
+                "Source project should have no scripts"
+            )
+
         logger.info(f"  ✓ {kind} project validated")
-    
+
     logger.info("✅ All project kinds tested successfully")
+
 
 # ===== Pattern Summary =====
 # 1. Import `from pinjected.test import injected_pytest`

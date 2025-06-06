@@ -33,8 +33,8 @@ RUN ["bin/bash","-c","source /opt/rye/env"]
 
 @injected
 async def macros_install_python_with_rye(
-        python_version_dir,
-        pyproject_dir_in_container,
+    python_version_dir,
+    pyproject_dir_in_container,
 ) -> Macro:
     return [
         RCopy(python_version_dir, pyproject_dir_in_container / ".python-version"),
@@ -42,7 +42,7 @@ async def macros_install_python_with_rye(
 # download python from .python-version
 WORKDIR {pyproject_dir_in_container}
 RUN rye fetch
-""")
+"""),
     ]
 
 
@@ -62,17 +62,15 @@ def create_latest_version_table(lines):
 
 @injected
 async def extract_clean_requirements(
-        storage_resolver,
-        get_clean_requirements,
-        /,
-        pdef: ProjectDef) -> list[str]:
+    storage_resolver, get_clean_requirements, /, pdef: ProjectDef
+) -> list[str]:
     additional_packages = []
     for ex in pdef.extra_dependencies:
         match ex:
-            case PlatformDependantPypi('linux', pkg):
+            case PlatformDependantPypi("linux", pkg):
                 additional_packages.append(pkg)
     pdir = pdef.dirs[0]
-    assert pdir.kind == 'rye', f"The first project dir must be rye. got {pdir}"
+    assert pdir.kind == "rye", f"The first project dir must be rye. got {pdir}"
     root = await storage_resolver.locate(pdir.id)
     lines = await get_clean_requirements(root, additional_packages)
     unversioned, version_table = create_latest_version_table(lines)
@@ -81,36 +79,34 @@ async def extract_clean_requirements(
 
 
 @injected
-async def remove_local_refs_from_lock(
-        content: str
-):
+async def remove_local_refs_from_lock(content: str):
     lines = content.split("\n")
     lines = [line for line in lines if "@" not in line]
     lines = [line for line in lines if "file:///" not in line]
     lines = [line for line in lines if "-e file" not in line]
-    lines = [line.split('#')[0] for line in lines]
+    lines = [line.split("#")[0] for line in lines]
     return "\n".join(lines)
 
 
 @injected
 @asynccontextmanager
 async def create_clean_requirements_lock(
-        storage_resolver,
-        get_clean_requirements_str,
-        /,
-        base_image: str,  # for interface compatibility
-        pdef: ProjectDef,
+    storage_resolver,
+    get_clean_requirements_str,
+    /,
+    base_image: str,  # for interface compatibility
+    pdef: ProjectDef,
 ) -> AsyncContextManager[Path]:
     additional_packages = []
     for ex in pdef.extra_dependencies:
         match ex:
-            case PlatformDependantPypi('linux', pkg):
+            case PlatformDependantPypi("linux", pkg):
                 additional_packages.append(pkg)
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir = Path(tmpdir)
         lines = ""
         pdir = pdef.dirs[0]
-        assert pdir.kind == 'rye', f"The first project dir must be rye. got {pdir}"
+        assert pdir.kind == "rye", f"The first project dir must be rye. got {pdir}"
         root = await storage_resolver.locate(pdir.id)
         lines += await get_clean_requirements_str(root, additional_packages)
         lines += "\n"
@@ -126,8 +122,8 @@ async def create_clean_requirements_lock(
 
 @injected
 async def a_separate_requirements_to_stages(
-        requirements: list[str],
-        prefixes=('torch', 'tensorflow', 'google'),
+    requirements: list[str],
+    prefixes=("torch", "tensorflow", "google"),
 ) -> Iterable[Path]:
     lock = requirements
 
@@ -139,10 +135,10 @@ async def a_separate_requirements_to_stages(
                 stages[p].add(d)
                 added = True
         if not added:
-            stages['other'].add(d)
+            stages["other"].add(d)
 
     # the order is important. so,
-    for stage in list(prefixes) + ['other']:
+    for stage in list(prefixes) + ["other"]:
         deps = stages[stage]
         deps = sorted(deps)
         yield stage, deps
@@ -151,16 +147,18 @@ async def a_separate_requirements_to_stages(
 @injected
 @asynccontextmanager
 async def a_separate_locks_to_stages(
-        a_separate_requirements_to_stages,
-        /,
-        lock_file: Path,
-        prefixes=('torch', 'tensorflow', 'google'),
+    a_separate_requirements_to_stages,
+    /,
+    lock_file: Path,
+    prefixes=("torch", "tensorflow", "google"),
 ) -> AsyncContextManager[Iterable[Path]]:
     with tempfile.TemporaryDirectory() as tmpdir:
         lock = lock_file.read_text().split("\n")
         locks = []
 
-        async for stage, deps in a_separate_requirements_to_stages(lock, list(prefixes) + ['other']):
+        async for stage, deps in a_separate_requirements_to_stages(
+            lock, list(prefixes) + ["other"]
+        ):
             lock = Path(tmpdir) / f"{stage}_requirements.lock"
             deps = sorted(deps)
             lock.write_text("\n".join(deps))
@@ -171,41 +169,42 @@ async def a_separate_locks_to_stages(
 
 @injected
 @asynccontextmanager
-async def macro_install_uv_constraint(
-        constraints: list[str]
-):
+async def macro_install_uv_constraint(constraints: list[str]):
     with tempfile.TemporaryDirectory() as tmpdir:
         filename = "uv_constraints.txt"
         constraint_path = Path(tmpdir) / filename
         constraint_path.write_text("\n".join(constraints))
         yield [
             RCopy(constraint_path, Path("/") / filename),
-            f"ENV UV_CONSTRAINT={Path('/') / filename}"
+            f"ENV UV_CONSTRAINT={Path('/') / filename}",
         ]
 
 
 @injected
 @asynccontextmanager
 async def macro_install_deps_via_staged_pyproject(
-        a_separate_requirements_to_stages,
-        extract_clean_requirements,
-        storage_resolver: IStorageResolver,
-        logger,
-        macro_install_uv_constraint,
-        /,
-        tgt: ProjectDef
+    a_separate_requirements_to_stages,
+    extract_clean_requirements,
+    storage_resolver: IStorageResolver,
+    logger,
+    macro_install_uv_constraint,
+    /,
+    tgt: ProjectDef,
 ):
     deps: list[str] = await extract_clean_requirements(tgt)
     cum_deps = []
     # src_pyproject = tgt.default_working_dir / 'pyproject.toml'
     src_project_dir = await storage_resolver.locate(tgt.dirs[0].id)
-    src_pyproject = src_project_dir / 'pyproject.toml'
-    readme_path = src_project_dir / 'README.md'
+    src_pyproject = src_project_dir / "pyproject.toml"
+    readme_path = src_project_dir / "README.md"
     import toml
+
     pyproject_data = toml.loads(src_pyproject.read_text())
-    assert readme_path.exists(), f"README.md must exist in the project root. {readme_path}"
+    assert readme_path.exists(), (
+        f"README.md must exist in the project root. {readme_path}"
+    )
     macros = [
-        RCopy(readme_path, tgt.default_working_dir / 'README.md'),
+        RCopy(readme_path, tgt.default_working_dir / "README.md"),
     ]
     with tempfile.TemporaryDirectory() as tmpdir:
         # Hack setuptools bug https://github.com/pypa/setuptools/issues/4519#issuecomment-2254983472
@@ -216,14 +215,14 @@ async def macro_install_deps_via_staged_pyproject(
 
         async for stage, deps in a_separate_requirements_to_stages(deps):
             cum_deps += deps
-            pyproject_data['project']['dependencies'] = cum_deps
+            pyproject_data["project"]["dependencies"] = cum_deps
             staged_pyp_name = f"{stage}_pyproject.toml"
             new_pyproject = Path(tmpdir) / staged_pyp_name
             new_pyproject.write_text(toml.dumps(pyproject_data))
             macros += [
                 RCopy(new_pyproject, tgt.default_working_dir / staged_pyp_name),
                 f"RUN mv {staged_pyp_name} pyproject.toml",
-                "RUN rye sync"
+                "RUN rye sync",
             ]
         logger.info(f"generated macros:{macros}")
         yield macros
@@ -236,13 +235,13 @@ def build_isolation():
 
 @injected
 async def macro_install_staged_rye_lock(
-        gather_rsync_macros_project_def,
-        storage_resolver,
-        macro_install_uv_constraint,
-        /,
-        staged_locks: list[Path],
-        project_pyproject_dir: Path,
-        pdef: ProjectDef
+    gather_rsync_macros_project_def,
+    storage_resolver,
+    macro_install_uv_constraint,
+    /,
+    staged_locks: list[Path],
+    project_pyproject_dir: Path,
+    pdef: ProjectDef,
 ):
     first_root = await storage_resolver.locate(pdef.dirs[0].id)
 
@@ -252,7 +251,7 @@ async def macro_install_staged_rye_lock(
         macro_build_preparation = [
             f'RUN /root/.cargo/bin/uv pip install "setuptools<72" wheel poetry hatchling editables',
             macro_install_uv_constraint(["setuptools<72"]),
-            "ENV UV_NO_BUILD_ISOLATION=true"  # this is to ensure
+            "ENV UV_NO_BUILD_ISOLATION=true",  # this is to ensure
         ]
     else:
         macro_build_preparation = []
@@ -266,7 +265,7 @@ async def macro_install_staged_rye_lock(
         opt = "--no-build-isolation" if build_isolation else ""
         install_locks_staged += [
             RCopy(staged_lock, project_pyproject_dir / staged_lock.name),
-            f"RUN /root/.cargo/bin/uv pip install -r {staged_lock.name} {opt}"
+            f"RUN /root/.cargo/bin/uv pip install -r {staged_lock.name} {opt}",
         ]
     # We need to make a lock for torch related stuff separately.
     rsyncs = await gather_rsync_macros_project_def(pdef)
@@ -291,64 +290,72 @@ async def macro_install_staged_rye_lock(
         # copy the dummy rye-venv.json to fool rye to use the venv in the job_working_dir
         """),
         get_dummy_rye_venv(project_pyproject_dir),
-        "RUN rye sync"
+        "RUN rye sync",
     ]
     return code
 
 
 def get_dummy_rye_venv(project_pyproject_dir):
     from returns.result import safe
+
     @safe
     def safe_read_text(path):
         return path.read_text().strip()
+
     @asynccontextmanager
     async def impl(cxt):
         rye_venv_path = project_pyproject_dir / ".venv/rye-venv.json"
         import json
         import re
-        python= json.loads(rye_venv_path.read_text())['python']
-        python_version = re.search(r'cpython@(.+)',python).group(1)
+
+        python = json.loads(rye_venv_path.read_text())["python"]
+        python_version = re.search(r"cpython@(.+)", python).group(1)
         dummy_rye_venv = dict(
             python=f"cpython@{python_version}",
-            venv_path=f"{project_pyproject_dir}/.venv"
+            venv_path=f"{project_pyproject_dir}/.venv",
         )
         with tempfile.NamedTemporaryFile() as tmp:
             dummy_path = Path(tmp.name)
             dummy_path.write_text(json.dumps(dummy_rye_venv))
-            yield RCopy(dummy_path, project_pyproject_dir / ".venv/rye-venv.json"),
+            yield (RCopy(dummy_path, project_pyproject_dir / ".venv/rye-venv.json"),)
 
     return impl
 
 
 @injected
 async def macro_preinstall_from_requirements_with_rye(
-        create_clean_requirements_lock,
-        a_separate_locks_to_stages,
-        macro_install_staged_rye_lock,
-        /,
-        base_image: str,
-        pdef: ProjectDef,
-        project_pyproject_dir: Path,
+    create_clean_requirements_lock,
+    a_separate_locks_to_stages,
+    macro_install_staged_rye_lock,
+    /,
+    base_image: str,
+    pdef: ProjectDef,
+    project_pyproject_dir: Path,
 ) -> Macro:
     @asynccontextmanager
     async def impl(cxt):
         async with create_clean_requirements_lock(base_image, pdef) as cleaned_lock:
             async with a_separate_locks_to_stages(cleaned_lock) as staged_locks:
-                yield await macro_install_staged_rye_lock(staged_locks, project_pyproject_dir, pdef)
+                yield await macro_install_staged_rye_lock(
+                    staged_locks, project_pyproject_dir, pdef
+                )
 
     return impl
 
 
 async def get_clean_pyproject(first_project, first_project_path):
     import toml
-    orig_pyproject = (Path(first_project_path.expanduser()) / "pyproject.toml").read_text()
+
+    orig_pyproject = (
+        Path(first_project_path.expanduser()) / "pyproject.toml"
+    ).read_text()
     orig_pyproject = toml.loads(orig_pyproject)
-    deps = orig_pyproject['project']['dependencies']
+    deps = orig_pyproject["project"]["dependencies"]
     new_deps = []
     for dep in deps:
-        if '@' not in dep:
+        if "@" not in dep:
             new_deps.append(dep)
-    orig_pyproject['project']['dependencies'] = new_deps
+    orig_pyproject["project"]["dependencies"] = new_deps
     new_pyproject_path = Path("/tmp") / first_project.id / "cleaned_pyproject.toml"
     new_pyproject_path.write_text(toml.dumps(orig_pyproject))
     return new_pyproject_path
@@ -356,12 +363,9 @@ async def get_clean_pyproject(first_project, first_project_path):
 
 @injected
 async def get_clean_requirements(
-        a_system,
-        /,
-        project_root: Path,
-        additional_packages: list[str]
+    a_system, /, project_root: Path, additional_packages: list[str]
 ) -> list[str]:
-    with (tempfile.TemporaryDirectory() as tmpdir):
+    with tempfile.TemporaryDirectory() as tmpdir:
         # make symbolic link to .venv so that rye won't make new venv
         tmp = Path(tmpdir)
         (tmp / ".venv").symlink_to(project_root / ".venv")
@@ -370,7 +374,7 @@ async def get_clean_requirements(
         tmp_pyproject = tmp / "pyproject.toml"
         tmp_pyproject.write_text(pyproject_path.read_text())
         if additional_packages:
-            pkgs = ' '.join(additional_packages)
+            pkgs = " ".join(additional_packages)
             await a_system(f"rye add --no-sync {pkgs}", working_dir=tmp)
         # it seems... locking outside the container returns different results.
         # so we need to...
@@ -385,14 +389,16 @@ async def get_clean_requirements(
         tmp_lock = tmp / "requirements.lock"
         lines = tmp_lock.read_text().split("\n")
     # now let's remove lines with @
-    blacklist = {'pyobjc-framework-quartz'}
+    blacklist = {"pyobjc-framework-quartz"}
 
     lines = [line for line in lines if "@" not in line]
     lines = [line for line in lines if "file:///" not in line]
     lines = [line for line in lines if "-e file" not in line]
     lines = [line for line in lines if line.strip() not in blacklist]
-    lines = [line for line in lines if not line.strip().startswith('pyobjc')]  # remove mac related stuff
-    lines = [line.split('#')[0] for line in lines]
+    lines = [
+        line for line in lines if not line.strip().startswith("pyobjc")
+    ]  # remove mac related stuff
+    lines = [line.split("#")[0] for line in lines]
     lines = [l for l in lines if l.strip()]
     return lines
 
@@ -400,16 +406,16 @@ async def get_clean_requirements(
 @injected
 @asynccontextmanager
 async def get_lock_via_container(
-        storage_resolver: IStorageResolver,
-        docker__install_rye,
-        macros_install_python_with_rye,
-        gather_rsync_macros_project_def,
-        prepare_build_context_with_macro,
-        a_build_docker_for_output,
-        logger,
-        /,
-        base_image: str,
-        pdef: ProjectDef
+    storage_resolver: IStorageResolver,
+    docker__install_rye,
+    macros_install_python_with_rye,
+    gather_rsync_macros_project_def,
+    prepare_build_context_with_macro,
+    a_build_docker_for_output,
+    logger,
+    /,
+    base_image: str,
+    pdef: ProjectDef,
 ):
     """
     1. install rye
@@ -431,8 +437,12 @@ async def get_lock_via_container(
         "ARG DEBIAN_FRONTEND=noninteractive",
         "RUN apt-get update && apt-get install -y python3-pip python3-dev build-essential libssl-dev curl git clang",
         await docker__install_rye(),
-        await macros_install_python_with_rye(root_path / ".python-version", pyproject_dir_in_container),
-        await gather_rsync_macros_project_def(pdef),  # rsync sources :) so we can run rye lock!
+        await macros_install_python_with_rye(
+            root_path / ".python-version", pyproject_dir_in_container
+        ),
+        await gather_rsync_macros_project_def(
+            pdef
+        ),  # rsync sources :) so we can run rye lock!
         f"WORKDIR {pyproject_dir_in_container}",
         "RUN rye lock",
         "FROM scratch AS rye_lock_export",
@@ -444,20 +454,22 @@ async def get_lock_via_container(
     async with prepare_build_context_with_macro(macros) as cxt:
         # now i want to build and get output.
         with tempfile.TemporaryDirectory() as local_output_dir:
-            await a_build_docker_for_output(cxt.build_dir, build_id=build_id, local_output_dir=local_output_dir)
-            yield Path(local_output_dir) / 'requirements.lock'
+            await a_build_docker_for_output(
+                cxt.build_dir, build_id=build_id, local_output_dir=local_output_dir
+            )
+            yield Path(local_output_dir) / "requirements.lock"
 
 
 @injected
 async def macro_preinstall_from_requirements_with_rye__v2(
-        a_separate_locks_to_stages,
-        macro_install_staged_rye_lock,
-        get_lock_via_container,
-        remove_local_refs_from_lock,
-        /,
-        base_image: str,
-        pdef: ProjectDef,
-        project_pyproject_dir: Path,
+    a_separate_locks_to_stages,
+    macro_install_staged_rye_lock,
+    get_lock_via_container,
+    remove_local_refs_from_lock,
+    /,
+    base_image: str,
+    pdef: ProjectDef,
+    project_pyproject_dir: Path,
 ) -> Macro:
     @asynccontextmanager
     async def impl(cxt):
@@ -465,19 +477,20 @@ async def macro_preinstall_from_requirements_with_rye__v2(
             with tempfile.TemporaryDirectory() as tmpdir:
                 tmpdir = Path(tmpdir)
                 cleaned_lock = tmpdir / "cleaned_requirements.lock"
-                cleaned_lock.write_text(await remove_local_refs_from_lock(original_lock.read_text()))
+                cleaned_lock.write_text(
+                    await remove_local_refs_from_lock(original_lock.read_text())
+                )
                 async with a_separate_locks_to_stages(cleaned_lock) as staged_locks:
-                    yield await macro_install_staged_rye_lock(staged_locks, project_pyproject_dir, pdef)
+                    yield await macro_install_staged_rye_lock(
+                        staged_locks, project_pyproject_dir, pdef
+                    )
 
     return impl
 
 
 @injected
 async def get_clean_requirements_str(
-        get_clean_requirements,
-        /,
-        project_root: Path,
-        additional_packages: list[str]
+    get_clean_requirements, /, project_root: Path, additional_packages: list[str]
 ):
     lines = await get_clean_requirements(project_root, additional_packages)
     lines = "\n".join(lines)
@@ -486,11 +499,11 @@ async def get_clean_requirements_str(
 
 @injected
 async def get_clean_requirements_lock(
-        logger,
-        get_clean_requirements_str,
-        /,
-        project_root: Path,
-        additional_packages: list[str]
+    logger,
+    get_clean_requirements_str,
+    /,
+    project_root: Path,
+    additional_packages: list[str],
 ) -> Path:
     dst = project_root / "requirements.lock"
     lines = get_clean_requirements_str(project_root, additional_packages)
@@ -501,28 +514,20 @@ async def get_clean_requirements_lock(
 
 @instance
 async def _test_get_lock(
-        logger,
-        get_lock_via_container,
+    logger,
+    get_lock_via_container,
 ):
     async with get_lock_via_container(
-            base_image="python:3.9",
-            project=ProjectDef(
-                dirs=[
-                    ProjectDir(
-                        id="ml-nexus",
-                        kind='rye',
-                        excludes=default_ignore_set
-                    )
-                ]
-            )
+        base_image="python:3.9",
+        project=ProjectDef(
+            dirs=[ProjectDir(id="ml-nexus", kind="rye", excludes=default_ignore_set)]
+        ),
     ) as lock:
         logger.info(f"lockfile:{lock}")
         logger.info(f"lockfile content:{lock.read_text()}")
 
 
-with design(
-        new_RsyncArgs=injected(RsyncArgs)
-):
+with design(new_RsyncArgs=injected(RsyncArgs)):
     run_test_get_lock: IProxy = _test_get_lock
 
 __meta_design__ = design()

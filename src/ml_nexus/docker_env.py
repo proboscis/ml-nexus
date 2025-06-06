@@ -10,8 +10,13 @@ from pinjected.compatibility.task_group import TaskGroup
 
 from ml_nexus.docker.builder.docker_builder import DockerBuilder
 from ml_nexus.docker.builder.macros.macro_defs import Macro
-from ml_nexus.project_structure import ProjectDef, ProjectDir, ProjectPlacement, IScriptRunner, \
-    ScriptRunContext
+from ml_nexus.project_structure import (
+    ProjectDef,
+    ProjectDir,
+    ProjectPlacement,
+    IScriptRunner,
+    ScriptRunContext,
+)
 from ml_nexus.rsync_util import RsyncArgs, RsyncLocation
 from ml_nexus.storage_resolver import IStorageResolver
 from ml_nexus.util import CommandException
@@ -26,7 +31,10 @@ async def a_ssh_cmd(logger, a_system, /, host, cmd: str):
         try:
             return await attempt()
         except CommandException as ce:
-            if 'Connection reset by peer' in ce.stderr or 'Connection closed by remote host' in ce.stderr:
+            if (
+                "Connection reset by peer" in ce.stderr
+                or "Connection closed by remote host" in ce.stderr
+            ):
                 logger.info(f"ssh command failed with {ce.stderr}. Retrying...")
                 continue
             else:
@@ -46,6 +54,7 @@ class DockerHostMounter:
     """
     Currently rsync all resources and mounts it on /resources
     """
+
     _storage_resolver: IStorageResolver
     _a_system: Callable
     _a_ssh_cmd: Callable
@@ -64,13 +73,13 @@ class DockerHostMounter:
                 src=source_path,
                 dst=RsyncLocation(host=host, path=root_path / dir.id),
                 excludes=dir.excludes,
-                options=['--delete']
+                options=["--delete"],
             )
             await rsync.run()
 
         async with TaskGroup() as tg:
             for pdir in tgts:
-                if pdir.kind == 'resource':
+                if pdir.kind == "resource":
                     tg.create_task(task(pdir))
 
     async def prepare_resource(self, host, tgt: ProjectDef):
@@ -126,7 +135,9 @@ class DockerHostEnvironment(IScriptRunner):
             if self.synced.is_set():
                 return self.image_tag
             else:
-                image = await self.docker_builder.a_build(self.image_tag, use_cache=True)
+                image = await self.docker_builder.a_build(
+                    self.image_tag, use_cache=True
+                )
                 # No pushing required, since it's building locally.
                 await self.mounter.prepare_resource(self.docker_host, self.project)
 
@@ -145,7 +156,7 @@ class DockerHostEnvironment(IScriptRunner):
         docker_cmd = f"docker run --gpus all --net={self.network} {self.mounter.docker_opts(self.project.placement)} {volume_options} {opts} --shm-size={self.shared_memory_size} --rm {image} {cmd}"
         return docker_cmd
 
-    async def run_script(self, script: str) -> 'PsResult':
+    async def run_script(self, script: str) -> "PsResult":
         # init_script = await self.docker_builder.a_entrypoint_script()
         init_script = "\n".join(self.docker_builder.scripts)
 
@@ -153,32 +164,38 @@ class DockerHostEnvironment(IScriptRunner):
 {init_script}
 {script}
 """
-        base64_encoded_script = base64.b64encode(final_script.encode('utf-8')).decode()
-        cmd = await self.build_docker_cmd(f"bash /usr/local/bin/base64_runner.sh {base64_encoded_script}")
-        result = await self._a_system_parallel(f'ssh {self.docker_host} {cmd}')
-        
+        base64_encoded_script = base64.b64encode(final_script.encode("utf-8")).decode()
+        cmd = await self.build_docker_cmd(
+            f"bash /usr/local/bin/base64_runner.sh {base64_encoded_script}"
+        )
+        result = await self._a_system_parallel(f"ssh {self.docker_host} {cmd}")
+
         if result.exit_code != 0:
             from ml_nexus.util import CommandException
+
             raise CommandException(
                 f"Script execution failed with exit code {result.exit_code}",
                 code=result.exit_code,
                 stdout=result.stdout,
-                stderr=result.stderr
+                stderr=result.stderr,
             )
         return result
 
-    async def run_script_without_init(self, script: str) -> 'PsResult':
-        base64_encoded_script = base64.b64encode(script.encode('utf-8')).decode()
-        cmd = await self.build_docker_cmd(f"bash /usr/local/bin/base64_runner.sh {base64_encoded_script}")
-        result = await self._a_system_parallel(f'ssh {self.docker_host} {cmd}')
-        
+    async def run_script_without_init(self, script: str) -> "PsResult":
+        base64_encoded_script = base64.b64encode(script.encode("utf-8")).decode()
+        cmd = await self.build_docker_cmd(
+            f"bash /usr/local/bin/base64_runner.sh {base64_encoded_script}"
+        )
+        result = await self._a_system_parallel(f"ssh {self.docker_host} {cmd}")
+
         if result.exit_code != 0:
             from ml_nexus.util import CommandException
+
             raise CommandException(
                 f"Script execution failed with exit code {result.exit_code}",
                 code=result.exit_code,
                 stdout=result.stdout,
-                stderr=result.stderr
+                stderr=result.stderr,
             )
         return result
 
@@ -187,14 +204,14 @@ class DockerHostEnvironment(IScriptRunner):
             str(path).replace(
                 str(self.project.placement.resources_root),
                 str(self.mounter.host_resource_root),
-                1
+                1,
             )
         )
 
     async def upload_remote(self, local: Path, remote: Path):
         remote = self.container_path_to_host_path(remote)
         if not local.is_dir():
-            await self._a_system(f'ssh {self.docker_host} mkdir -p {remote.parent}')
+            await self._a_system(f"ssh {self.docker_host} mkdir -p {remote.parent}")
             await self._a_system(f"scp -r {local} {self.docker_host}:{remote}")
         else:
             await self._a_system(f"ssh {self.docker_host} mkdir -p {remote}")
@@ -202,7 +219,7 @@ class DockerHostEnvironment(IScriptRunner):
                 src=local,
                 dst=RsyncLocation(host=self.docker_host, path=remote),
                 excludes=[],
-                options=[]
+                options=[],
             )
             await rsync.run()
 
@@ -226,9 +243,23 @@ class DockerHostEnvironment(IScriptRunner):
             delete_remote=self.delete_remote,
             download_remote=self.download_remote,
             local_download_path=self._env_result_download_path,
-            env=self
+            env=self,
         )
 
 
-default_ignore_set = [".git", ".venv", ".idea", "__pycache__", ".pyc", ".idea", ".log", "src/wandb", "*.pth", "*.pkl",
-                      "*.tar.gz", "venv", "*.mdb", "vscode-plugin"]
+default_ignore_set = [
+    ".git",
+    ".venv",
+    ".idea",
+    "__pycache__",
+    ".pyc",
+    ".idea",
+    ".log",
+    "src/wandb",
+    "*.pth",
+    "*.pkl",
+    "*.tar.gz",
+    "venv",
+    "*.mdb",
+    "vscode-plugin",
+]

@@ -40,16 +40,11 @@ exit $exit_status
 
 
 @injected
-async def a_script(
-        script_base64_runner: str,
-        a_system,
-        /,
-        script
-):
+async def a_script(script_base64_runner: str, a_system, /, script):
     runner_path: Path = Path("~/.cache/env_manager/base64_runner.sh").expanduser()
     runner_path.parent.mkdir(parents=True, exist_ok=True)
     if not runner_path.exists():
         runner_path.write_text(script_base64_runner)
-    encoded_script = base64.b64encode(script.encode('utf-8')).decode()
+    encoded_script = base64.b64encode(script.encode("utf-8")).decode()
 
     return await a_system(rf"/bin/bash {runner_path} {encoded_script}")

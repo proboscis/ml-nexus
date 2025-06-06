@@ -17,11 +17,13 @@ from loguru import logger
 TEST_PROJECT_ROOT = Path(__file__).parent / "dummy_projects"
 
 # Test storage resolver
-test_storage_resolver = StaticStorageResolver({
-    "test_setuppy": TEST_PROJECT_ROOT / "test_setuppy",
-    "test_requirements": TEST_PROJECT_ROOT / "test_requirements",
-    "test_uv": TEST_PROJECT_ROOT / "test_uv",
-})
+test_storage_resolver = StaticStorageResolver(
+    {
+        "test_setuppy": TEST_PROJECT_ROOT / "test_setuppy",
+        "test_requirements": TEST_PROJECT_ROOT / "test_requirements",
+        "test_uv": TEST_PROJECT_ROOT / "test_uv",
+    }
+)
 
 # Test design configuration
 test_design = design(
@@ -38,102 +40,104 @@ test_design = design(
 )
 
 # Module design configuration
-__meta_design__ = design(
-    overrides=load_env_design + test_design
-)
+__meta_design__ = design(overrides=load_env_design + test_design)
 
 
 # ===== Test 1: Auto detection with requirements.txt uses pyvenv =====
 @injected_pytest(test_design)
-async def test_auto_requirements_uses_pyvenv(schematics_universal, new_DockerEnvFromSchematics, logger):
+async def test_auto_requirements_uses_pyvenv(
+    schematics_universal, new_DockerEnvFromSchematics, logger
+):
     """Test that auto-detected requirements.txt project uses pyvenv"""
     logger.info("Testing auto detection with requirements.txt -> pyvenv")
-    
+
     # Create project with auto detection
     project = ProjectDef(dirs=[ProjectDir("test_requirements", kind="auto")])
-    
+
     # Generate schematic
     schematic = await schematics_universal(
-        target=project,
-        base_image='python:3.11-slim'
+        target=project, base_image="python:3.11-slim"
     )
-    
+
     # Verify the schematic uses pyvenv components
     builder = schematic.builder
-    scripts_str = ' '.join(builder.scripts)
+    scripts_str = " ".join(builder.scripts)
     macros_str = str(builder.macros)
-    
+
     # Check for pyenv/pyvenv setup indicators
-    assert 'pip install' in scripts_str, "Should use pip install"
-    assert 'requirements.txt' in scripts_str, "Should reference requirements.txt"
-    
+    assert "pip install" in scripts_str, "Should use pip install"
+    assert "requirements.txt" in scripts_str, "Should reference requirements.txt"
+
     # Check for pyenv installation in macros (pyvenv uses pyenv under the hood)
-    assert any('pyenv' in str(macro) for macro in builder.macros), \
+    assert any("pyenv" in str(macro) for macro in builder.macros), (
         "Should have pyenv installation in macros for pyvenv setup"
-    
+    )
+
     logger.info("✅ Requirements.txt auto-detection uses pyvenv")
-    
+
     # Create Docker environment
     docker_env = new_DockerEnvFromSchematics(
-        project=project,
-        schematics=schematic,
-        docker_host="zeus"
+        project=project, schematics=schematic, docker_host="zeus"
     )
-    
+
     # Test that Python and packages are properly installed
     result = await docker_env.run_script("python --version")
     assert "Python" in result.stdout
-    
+
     # Test that pandas is installed (from requirements.txt)
-    result = await docker_env.run_script("python -c 'import pandas; print(f\"pandas {pandas.__version__}\")'")
+    result = await docker_env.run_script(
+        "python -c 'import pandas; print(f\"pandas {pandas.__version__}\")'"
+    )
     assert "pandas" in result.stdout
-    
+
     logger.info("✅ Pyvenv environment working correctly with requirements.txt")
 
 
 # ===== Test 2: Auto detection with setup.py uses pyvenv =====
 @injected_pytest(test_design)
-async def test_auto_setuppy_uses_pyvenv(schematics_universal, new_DockerEnvFromSchematics, logger):
+async def test_auto_setuppy_uses_pyvenv(
+    schematics_universal, new_DockerEnvFromSchematics, logger
+):
     """Test that auto-detected setup.py project uses pyvenv"""
     logger.info("Testing auto detection with setup.py -> pyvenv")
-    
+
     # Create project with auto detection
     project = ProjectDef(dirs=[ProjectDir("test_setuppy", kind="auto")])
-    
+
     # Generate schematic
     schematic = await schematics_universal(
-        target=project,
-        base_image='python:3.11-slim'
+        target=project, base_image="python:3.11-slim"
     )
-    
+
     # Verify the schematic uses pyvenv components
     builder = schematic.builder
-    scripts_str = ' '.join(builder.scripts)
-    
+    scripts_str = " ".join(builder.scripts)
+
     # Check for pyenv/pyvenv setup indicators
-    assert 'pip install -e .' in scripts_str, "Should use pip install -e . for setup.py"
-    
+    assert "pip install -e ." in scripts_str, "Should use pip install -e . for setup.py"
+
     # Check for pyenv installation in macros
-    assert any('pyenv' in str(macro) for macro in builder.macros), \
+    assert any("pyenv" in str(macro) for macro in builder.macros), (
         "Should have pyenv installation in macros for pyvenv setup"
-    
+    )
+
     logger.info("✅ Setup.py auto-detection uses pyvenv")
-    
+
     # Create Docker environment
     docker_env = new_DockerEnvFromSchematics(
-        project=project,
-        schematics=schematic,
-        docker_host="zeus"
+        project=project, schematics=schematic, docker_host="zeus"
     )
-    
+
     # Test that Python is properly installed
     result = await docker_env.run_script("python --version")
     assert "Python" in result.stdout
-    
+
     # Test that the package is installed
-    result = await docker_env.run_script("python -c 'import test_setuppy; print(\"test_setuppy imported successfully\")'")
+    result = await docker_env.run_script(
+        "python -c 'import test_setuppy; print(\"test_setuppy imported successfully\")'"
+    )
     assert "test_setuppy imported successfully" in result.stdout
-    
+
     logger.info("✅ Pyvenv environment working correctly with setup.py")
 
 
@@ -142,28 +146,26 @@ async def test_auto_setuppy_uses_pyvenv(schematics_universal, new_DockerEnvFromS
 async def test_pyvenv_differences(schematics_universal, logger):
     """Verify that pyvenv setup is different from UV/Rye"""
     logger.info("Comparing pyvenv setup vs UV/Rye")
-    
+
     # Create auto-detected project (will use pyvenv)
     auto_project = ProjectDef(dirs=[ProjectDir("test_requirements", kind="auto")])
     auto_schematic = await schematics_universal(
-        target=auto_project,
-        base_image='python:3.11-slim'
+        target=auto_project, base_image="python:3.11-slim"
     )
-    
+
     # Create UV project for comparison
     uv_project = ProjectDef(dirs=[ProjectDir("test_uv", kind="uv")])
     uv_schematic = await schematics_universal(
-        target=uv_project,
-        base_image='python:3.11-slim'
+        target=uv_project, base_image="python:3.11-slim"
     )
-    
+
     # Compare the setups
-    auto_scripts = ' '.join(auto_schematic.builder.scripts)
-    uv_scripts = ' '.join(uv_schematic.builder.scripts)
-    
+    auto_scripts = " ".join(auto_schematic.builder.scripts)
+    uv_scripts = " ".join(uv_schematic.builder.scripts)
+
     # Pyvenv uses pip, UV uses uv
-    assert 'pip install' in auto_scripts, "Pyvenv should use pip"
-    assert 'uv sync' in uv_scripts, "UV should use uv sync"
-    assert 'uv sync' not in auto_scripts, "Pyvenv should not use uv"
-    
+    assert "pip install" in auto_scripts, "Pyvenv should use pip"
+    assert "uv sync" in uv_scripts, "UV should use uv sync"
+    assert "uv sync" not in auto_scripts, "Pyvenv should not use uv"
+
     logger.info("✅ Confirmed pyvenv setup is different from UV")

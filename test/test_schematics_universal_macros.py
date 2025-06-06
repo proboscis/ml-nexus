@@ -16,96 +16,88 @@ from loguru import logger
 # Create storage resolver for test projects
 TEST_PROJECT_ROOT = Path(__file__).parent / "dummy_projects"
 
-test_storage_resolver = StaticStorageResolver({
-    "test_uv": TEST_PROJECT_ROOT / "test_uv",
-    "test_rye": TEST_PROJECT_ROOT / "test_rye", 
-    "test_setuppy": TEST_PROJECT_ROOT / "test_setuppy",
-    "test_requirements": TEST_PROJECT_ROOT / "test_requirements",
-    "test_source": TEST_PROJECT_ROOT / "test_source",
-    "test_resource": TEST_PROJECT_ROOT / "test_resource",
-})
+test_storage_resolver = StaticStorageResolver(
+    {
+        "test_uv": TEST_PROJECT_ROOT / "test_uv",
+        "test_rye": TEST_PROJECT_ROOT / "test_rye",
+        "test_setuppy": TEST_PROJECT_ROOT / "test_setuppy",
+        "test_requirements": TEST_PROJECT_ROOT / "test_requirements",
+        "test_source": TEST_PROJECT_ROOT / "test_source",
+        "test_resource": TEST_PROJECT_ROOT / "test_resource",
+    }
+)
 
 # Test design configuration
-test_design = design(
-    storage_resolver=test_storage_resolver,
-    logger=logger
-)
+test_design = design(storage_resolver=test_storage_resolver, logger=logger)
 
 # Module design configuration
-__meta_design__ = design(
-    overrides=load_env_design + test_design
-)
+__meta_design__ = design(overrides=load_env_design + test_design)
 
 # Test cases for each kind
 
 # 1. UV kind test
-test_uv_project = ProjectDef(dirs=[ProjectDir('test_uv', kind='uv')])
+test_uv_project = ProjectDef(dirs=[ProjectDir("test_uv", kind="uv")])
 test_uv_schematic: IProxy = schematics_universal(
-    target=test_uv_project,
-    base_image='python:3.11-slim'
+    target=test_uv_project, base_image="python:3.11-slim"
 )
 
-# 2. Rye kind test  
-test_rye_project = ProjectDef(dirs=[ProjectDir('test_rye', kind='rye')])
+# 2. Rye kind test
+test_rye_project = ProjectDef(dirs=[ProjectDir("test_rye", kind="rye")])
 test_rye_schematic: IProxy = schematics_universal(
-    target=test_rye_project,
-    base_image='python:3.11-slim'
+    target=test_rye_project, base_image="python:3.11-slim"
 )
 
 # 3. Setup.py kind test
-test_setuppy_project = ProjectDef(dirs=[ProjectDir('test_setuppy', kind='setup.py')])
+test_setuppy_project = ProjectDef(dirs=[ProjectDir("test_setuppy", kind="setup.py")])
 test_setuppy_schematic: IProxy = schematics_universal(
-    target=test_setuppy_project,
-    base_image='python:3.11-slim',
-    python_version='3.11'
+    target=test_setuppy_project, base_image="python:3.11-slim", python_version="3.11"
 )
 
 # 4. Auto kind test (should detect requirements.txt)
-test_auto_project = ProjectDef(dirs=[ProjectDir('test_requirements', kind='auto')])
+test_auto_project = ProjectDef(dirs=[ProjectDir("test_requirements", kind="auto")])
 test_auto_schematic: IProxy = schematics_universal(
-    target=test_auto_project,
-    base_image='python:3.11-slim'
+    target=test_auto_project, base_image="python:3.11-slim"
 )
 
 # 5. Source kind test
-test_source_project = ProjectDef(dirs=[ProjectDir('test_source', kind='source')])
+test_source_project = ProjectDef(dirs=[ProjectDir("test_source", kind="source")])
 test_source_schematic: IProxy = schematics_universal(
-    target=test_source_project,
-    base_image='ubuntu:22.04'
+    target=test_source_project, base_image="ubuntu:22.04"
 )
 
 # 6. Resource kind test
-test_resource_project = ProjectDef(dirs=[ProjectDir('test_resource', kind='resource')])
+test_resource_project = ProjectDef(dirs=[ProjectDir("test_resource", kind="resource")])
 test_resource_schematic: IProxy = schematics_universal(
-    target=test_resource_project,
-    base_image='ubuntu:22.04'
+    target=test_resource_project, base_image="ubuntu:22.04"
 )
+
 
 # ===== Test 1: UV project macros =====
 @injected_pytest(test_design)
 async def test_uv_project_macros(schematics_universal, logger):
     """Test that UV projects generate correct macros and scripts"""
     logger.info("Testing UV project macros and scripts")
-    
-    project = ProjectDef(dirs=[ProjectDir('test_uv', kind='uv')])
+
+    project = ProjectDef(dirs=[ProjectDir("test_uv", kind="uv")])
     schematic = await schematics_universal(
-        target=project,
-        base_image='python:3.11-slim'
+        target=project, base_image="python:3.11-slim"
     )
-    
+
     builder = schematic.builder
-    
+
     # Verify base image
-    assert builder.base_image == 'python:3.11-slim'
-    
+    assert builder.base_image == "python:3.11-slim"
+
     # Verify macros exist
     assert len(builder.macros) > 0, "UV project should have macros"
-    
+
     # Verify scripts contain UV commands
-    scripts_str = ' '.join(builder.scripts)
-    assert 'uv sync' in scripts_str, "UV project should have 'uv sync' command"
-    
-    logger.info(f"✅ UV project: {len(builder.macros)} macros, {len(builder.scripts)} scripts")
+    scripts_str = " ".join(builder.scripts)
+    assert "uv sync" in scripts_str, "UV project should have 'uv sync' command"
+
+    logger.info(
+        f"✅ UV project: {len(builder.macros)} macros, {len(builder.scripts)} scripts"
+    )
 
 
 # ===== Test 2: Rye project macros =====
@@ -113,26 +105,27 @@ async def test_uv_project_macros(schematics_universal, logger):
 async def test_rye_project_macros(schematics_universal, logger):
     """Test that Rye projects generate correct macros and scripts"""
     logger.info("Testing Rye project macros and scripts")
-    
-    project = ProjectDef(dirs=[ProjectDir('test_rye', kind='rye')])
+
+    project = ProjectDef(dirs=[ProjectDir("test_rye", kind="rye")])
     schematic = await schematics_universal(
-        target=project,
-        base_image='python:3.11-slim'
+        target=project, base_image="python:3.11-slim"
     )
-    
+
     builder = schematic.builder
-    
+
     # Verify base image
-    assert builder.base_image == 'python:3.11-slim'
-    
+    assert builder.base_image == "python:3.11-slim"
+
     # Verify macros exist
     assert len(builder.macros) > 0, "Rye project should have macros"
-    
+
     # Verify scripts contain Rye commands
-    scripts_str = ' '.join(builder.scripts)
-    assert 'rye sync' in scripts_str, "Rye project should have 'rye sync' command"
-    
-    logger.info(f"✅ Rye project: {len(builder.macros)} macros, {len(builder.scripts)} scripts")
+    scripts_str = " ".join(builder.scripts)
+    assert "rye sync" in scripts_str, "Rye project should have 'rye sync' command"
+
+    logger.info(
+        f"✅ Rye project: {len(builder.macros)} macros, {len(builder.scripts)} scripts"
+    )
 
 
 # ===== Test 3: Setup.py project macros =====
@@ -140,27 +133,29 @@ async def test_rye_project_macros(schematics_universal, logger):
 async def test_setuppy_project_macros(schematics_universal, logger):
     """Test that setup.py projects generate correct macros and scripts"""
     logger.info("Testing setup.py project macros and scripts")
-    
-    project = ProjectDef(dirs=[ProjectDir('test_setuppy', kind='setup.py')])
+
+    project = ProjectDef(dirs=[ProjectDir("test_setuppy", kind="setup.py")])
     schematic = await schematics_universal(
-        target=project,
-        base_image='python:3.11-slim',
-        python_version='3.11'
+        target=project, base_image="python:3.11-slim", python_version="3.11"
     )
-    
+
     builder = schematic.builder
-    
+
     # Verify base image
-    assert builder.base_image == 'python:3.11-slim'
-    
+    assert builder.base_image == "python:3.11-slim"
+
     # Verify macros exist
     assert len(builder.macros) > 0, "Setup.py project should have macros"
-    
+
     # Verify scripts contain pip install
-    scripts_str = ' '.join(builder.scripts)
-    assert 'pip install' in scripts_str, "Setup.py project should have 'pip install' command"
-    
-    logger.info(f"✅ Setup.py project: {len(builder.macros)} macros, {len(builder.scripts)} scripts")
+    scripts_str = " ".join(builder.scripts)
+    assert "pip install" in scripts_str, (
+        "Setup.py project should have 'pip install' command"
+    )
+
+    logger.info(
+        f"✅ Setup.py project: {len(builder.macros)} macros, {len(builder.scripts)} scripts"
+    )
 
 
 # ===== Test 4: Auto-detected requirements.txt project =====
@@ -168,27 +163,29 @@ async def test_setuppy_project_macros(schematics_universal, logger):
 async def test_auto_requirements_project_macros(schematics_universal, logger):
     """Test that auto-detected requirements.txt projects generate correct macros"""
     logger.info("Testing auto-detected requirements.txt project")
-    
-    project = ProjectDef(dirs=[ProjectDir('test_requirements', kind='auto')])
+
+    project = ProjectDef(dirs=[ProjectDir("test_requirements", kind="auto")])
     schematic = await schematics_universal(
-        target=project,
-        base_image='python:3.11-slim'
+        target=project, base_image="python:3.11-slim"
     )
-    
+
     builder = schematic.builder
-    
+
     # Verify base image
-    assert builder.base_image == 'python:3.11-slim'
-    
+    assert builder.base_image == "python:3.11-slim"
+
     # Verify macros exist
     assert len(builder.macros) > 0, "Requirements project should have macros"
-    
+
     # Verify scripts contain pip install
-    scripts_str = ' '.join(builder.scripts)
-    assert 'pip install' in scripts_str and 'requirements.txt' in scripts_str, \
+    scripts_str = " ".join(builder.scripts)
+    assert "pip install" in scripts_str and "requirements.txt" in scripts_str, (
         "Requirements project should install from requirements.txt"
-    
-    logger.info(f"✅ Requirements project: {len(builder.macros)} macros, {len(builder.scripts)} scripts")
+    )
+
+    logger.info(
+        f"✅ Requirements project: {len(builder.macros)} macros, {len(builder.scripts)} scripts"
+    )
 
 
 # ===== Test 5: Source project (no Python) =====
@@ -196,24 +193,25 @@ async def test_auto_requirements_project_macros(schematics_universal, logger):
 async def test_source_project_macros(schematics_universal, logger):
     """Test that source projects don't set up Python environment"""
     logger.info("Testing source project (no Python)")
-    
-    project = ProjectDef(dirs=[ProjectDir('test_source', kind='source')])
-    schematic = await schematics_universal(
-        target=project,
-        base_image='ubuntu:22.04'
-    )
-    
+
+    project = ProjectDef(dirs=[ProjectDir("test_source", kind="source")])
+    schematic = await schematics_universal(target=project, base_image="ubuntu:22.04")
+
     builder = schematic.builder
-    
+
     # Verify base image
-    assert builder.base_image == 'ubuntu:22.04'
-    
+    assert builder.base_image == "ubuntu:22.04"
+
     # Verify no Python setup scripts
-    scripts_str = ' '.join(builder.scripts)
-    assert 'python' not in scripts_str.lower(), "Source project should not set up Python"
-    assert 'pip' not in scripts_str.lower(), "Source project should not use pip"
-    
-    logger.info(f"✅ Source project: {len(builder.macros)} macros, {len(builder.scripts)} scripts")
+    scripts_str = " ".join(builder.scripts)
+    assert "python" not in scripts_str.lower(), (
+        "Source project should not set up Python"
+    )
+    assert "pip" not in scripts_str.lower(), "Source project should not use pip"
+
+    logger.info(
+        f"✅ Source project: {len(builder.macros)} macros, {len(builder.scripts)} scripts"
+    )
 
 
 # ===== Test 6: Verify all project kinds =====
@@ -221,79 +219,99 @@ async def test_source_project_macros(schematics_universal, logger):
 async def test_verify_all_macros(schematics_universal, logger):
     """Verify macros for all project kinds"""
     logger.info("Testing all project kinds for macro generation")
-    
+
     test_cases = [
-        ("UV", ProjectDir('test_uv', kind='uv'), 'uv sync'),
-        ("Rye", ProjectDir('test_rye', kind='rye'), 'rye sync'),
-        ("Setup.py", ProjectDir('test_setuppy', kind='setup.py'), 'pip install'),
-        ("Requirements", ProjectDir('test_requirements', kind='auto'), 'requirements.txt'),
-        ("Resource", ProjectDir('test_resource', kind='resource'), None),
-        ("Source", ProjectDir('test_source', kind='source'), None),
+        ("UV", ProjectDir("test_uv", kind="uv"), "uv sync"),
+        ("Rye", ProjectDir("test_rye", kind="rye"), "rye sync"),
+        ("Setup.py", ProjectDir("test_setuppy", kind="setup.py"), "pip install"),
+        (
+            "Requirements",
+            ProjectDir("test_requirements", kind="auto"),
+            "requirements.txt",
+        ),
+        ("Resource", ProjectDir("test_resource", kind="resource"), None),
+        ("Source", ProjectDir("test_source", kind="source"), None),
     ]
-    
+
     results = []
     for name, project_dir, expected_command in test_cases:
         project = ProjectDef(dirs=[project_dir])
         schematic = await schematics_universal(
             target=project,
-            base_image='python:3.11-slim' if expected_command else 'ubuntu:22.04'
+            base_image="python:3.11-slim" if expected_command else "ubuntu:22.04",
         )
-        
+
         builder = schematic.builder
-        scripts_str = ' '.join(builder.scripts)
-        
+        scripts_str = " ".join(builder.scripts)
+
         if expected_command:
-            assert expected_command in scripts_str, \
+            assert expected_command in scripts_str, (
                 f"{name} project should contain '{expected_command}'"
-        
-        results.append({
-            "kind": name,
-            "macros": len(builder.macros),
-            "scripts": len(builder.scripts),
-            "mounts": len(schematic.mount_requests)
-        })
-        
-        logger.info(f"✅ {name}: {results[-1]['macros']} macros, "
-                   f"{results[-1]['scripts']} scripts, {results[-1]['mounts']} mounts")
-    
+            )
+
+        results.append(
+            {
+                "kind": name,
+                "macros": len(builder.macros),
+                "scripts": len(builder.scripts),
+                "mounts": len(schematic.mount_requests),
+            }
+        )
+
+        logger.info(
+            f"✅ {name}: {results[-1]['macros']} macros, "
+            f"{results[-1]['scripts']} scripts, {results[-1]['mounts']} mounts"
+        )
+
     # Verify we tested all kinds
     assert len(results) == 6, "Should have tested 6 project kinds"
     logger.info("✅ All project kinds verified")
 
+
 # Keep IProxy definitions for backward compatibility and pinjected run
 # These are for running analysis outside of pytest
+
 
 # Function to analyze schematics
 @injected
 async def a_analyze_schematic(schematic, kind_name: str):
     """Analyze the macros and scripts in a schematic"""
     builder = schematic.builder
-    
-    logger.info(f"\n{'='*60}")
+
+    logger.info(f"\n{'=' * 60}")
     logger.info(f"Analysis for {kind_name} kind")
-    logger.info(f"{'='*60}")
-    
+    logger.info(f"{'=' * 60}")
+
     logger.info(f"Base image: {builder.base_image}")
     logger.info(f"Macros count: {len(builder.macros)}")
     logger.info(f"Scripts count: {len(builder.scripts)}")
     logger.info(f"Mount requests: {len(schematic.mount_requests)}")
-    
+
     # Show first few scripts
     for i, script in enumerate(builder.scripts[:3]):
         logger.info(f"Script {i}: {script[:80]}...")
-    
+
     return {
         "kind": kind_name,
         "base_image": builder.base_image,
         "macros_count": len(builder.macros),
         "scripts_count": len(builder.scripts),
-        "mounts_count": len(schematic.mount_requests)
+        "mounts_count": len(schematic.mount_requests),
     }
+
 
 # IProxy objects for running analysis
 test_analyze_uv: IProxy = a_analyze_schematic(test_uv_schematic, kind_name="UV")
 test_analyze_rye: IProxy = a_analyze_schematic(test_rye_schematic, kind_name="RYE")
-test_analyze_setuppy: IProxy = a_analyze_schematic(test_setuppy_schematic, kind_name="SETUP.PY")
-test_analyze_auto: IProxy = a_analyze_schematic(test_auto_schematic, kind_name="AUTO (requirements.txt)")
-test_analyze_source: IProxy = a_analyze_schematic(test_source_schematic, kind_name="SOURCE")
-test_analyze_resource: IProxy = a_analyze_schematic(test_resource_schematic, kind_name="RESOURCE")
+test_analyze_setuppy: IProxy = a_analyze_schematic(
+    test_setuppy_schematic, kind_name="SETUP.PY"
+)
+test_analyze_auto: IProxy = a_analyze_schematic(
+    test_auto_schematic, kind_name="AUTO (requirements.txt)"
+)
+test_analyze_source: IProxy = a_analyze_schematic(
+    test_source_schematic, kind_name="SOURCE"
+)
+test_analyze_resource: IProxy = a_analyze_schematic(
+    test_resource_schematic, kind_name="RESOURCE"
+)

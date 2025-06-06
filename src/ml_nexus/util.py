@@ -21,12 +21,14 @@ class PsResult:
 
 def random_hex_color():
     import random
+
     # choose readable light colors in HSV space
     h = random.randint(0, 360)
     s = random.randint(50, 100)
     v = random.randint(80, 100)
     # now convert to hex
     import colorsys
+
     rgb = colorsys.hsv_to_rgb(h / 360, s / 100, v / 100)
     return f"#{int(rgb[0] * 255):02x}{int(rgb[1] * 255):02x}{int(rgb[2] * 255):02x}"
 
@@ -48,6 +50,7 @@ async def yield_from_stream_safe(stream):
 
 def log_with_color_id(stream_id, text, color):
     from loguru import logger
+
     logger = logger.opt(colors=True)
     text = escape_loguru_tags(text)
     text = text[:-1]  # remove the newline
@@ -58,7 +61,9 @@ def log_with_color_id(stream_id, text, color):
         logger.debug(f"[{stream_id}]{text}")
 
 
-async def stream_and_capture_output(stream, display=True, stream_id=None, color: str = None):
+async def stream_and_capture_output(
+    stream, display=True, stream_id=None, color: str = None
+):
     output = []
     buf = []
     if color is None:
@@ -72,16 +77,16 @@ async def stream_and_capture_output(stream, display=True, stream_id=None, color:
         decoded_line = line.decode()
         if display:
             # logger.opt(record=True).info(decoded_line)  # Print in real-time
-            if decoded_line.endswith('\n'):
-                text = ''.join(buf) + decoded_line
+            if decoded_line.endswith("\n"):
+                text = "".join(buf) + decoded_line
                 log_with_color_id(stream_id, text, color)
                 buf = []
         output.append(decoded_line)
-    return ''.join(output)
+    return "".join(output)
 
 
 def escape_loguru_tags(text):
-    return text.replace('<', '\<')
+    return text.replace("<", r"\<")
 
 
 class CommandException(Exception):
@@ -97,7 +102,9 @@ class CommandException(Exception):
 
 
 class SystemCall(Protocol):
-    async def __call__(self, command: str, env: dict = None, working_dir=None) -> PsResult:
+    async def __call__(
+        self, command: str, env: dict = None, working_dir=None
+    ) -> PsResult:
         """
         run a command in the system.
         :param command:
@@ -141,8 +148,7 @@ class SystemCallStdErr(ISystemCallEvent):
 
 
 class MLNexusSystemCallEventBus(Protocol):
-    async def __call__(self, event: ISystemCallEvent):
-        ...
+    async def __call__(self, event: ISystemCallEvent): ...
 
 
 @dataclass
@@ -161,6 +167,7 @@ async def ml_nexus_system_call_event_bus() -> MLNexusSystemCallEventBus:
     """
 
     from pinjected.test_helper.rich_task_viz import RichTaskVisualizer
+
     _viz: RichTaskVisualizer = None
     states: dict[str, SystemCallState] = dict()
     from rich.spinner import Spinner
@@ -199,8 +206,8 @@ async def ml_nexus_system_call_event_bus() -> MLNexusSystemCallEventBus:
                 # we have to start from second task.
                 for task, _state in states.items():
                     if _state.name not in viz.messages:
-                        if _state.status == 'started':
-                            status = Spinner('aesthetic')
+                        if _state.status == "started":
+                            status = Spinner("aesthetic")
                         else:
                             status = _state.status
                         viz.add(name=_state.name, status=status, message=_state.message)
@@ -208,7 +215,7 @@ async def ml_nexus_system_call_event_bus() -> MLNexusSystemCallEventBus:
             case SystemCallEnd(id=id, command=command, code=code):
                 state = states[id]
                 viz = await a_get_viz()
-                viz.update_status(state.name, 'Finished with code ' + str(code))
+                viz.update_status(state.name, "Finished with code " + str(code))
                 if code == 0:
                     viz.remove(state.name)
                 if len(states) == 2:
@@ -227,7 +234,9 @@ async def ml_nexus_system_call_event_bus() -> MLNexusSystemCallEventBus:
         match event:
             case SystemCallStart(id=id, command=command):
                 name = f"{id[:6]}:{command[:200]}"
-                states[id] = SystemCallState(id=id, name=name, command=command, status='started', message='')
+                states[id] = SystemCallState(
+                    id=id, name=name, command=command, status="started", message=""
+                )
                 if len(states) > 1:
                     await impl_parallel(event)
                 else:
@@ -235,9 +244,9 @@ async def ml_nexus_system_call_event_bus() -> MLNexusSystemCallEventBus:
             case SystemCallEnd(id=id, command=command, code=code):
                 state = states[id]
                 state.message = f"Finished with code {code}"
-                state.status = 'finished'
+                state.status = "finished"
                 if len(states) == 2:
-                    await impl_parallel(event)  #
+                    await impl_parallel(event)
                     await impl_single(event)
                 elif len(states) > 2:
                     await impl_parallel(event)
@@ -248,7 +257,7 @@ async def ml_nexus_system_call_event_bus() -> MLNexusSystemCallEventBus:
             case SystemCallStdOut(id=id, command=command, text=text):
                 state = states[id]
                 state.message = text.decode()[:-1]
-                state.status = 'running'
+                state.status = "running"
                 if len(states) > 1:
                     await impl_parallel(event)
                 else:
@@ -256,7 +265,7 @@ async def ml_nexus_system_call_event_bus() -> MLNexusSystemCallEventBus:
             case SystemCallStdErr(id=id, command=command, text=text):
                 state = states[id]
                 state.message = text.decode()[:-1]
-                state.status = 'running'
+                state.status = "running"
                 if len(states) > 1:
                     await impl_parallel(event)
                 else:
@@ -270,17 +279,21 @@ async def ml_nexus_system_call_event_bus() -> MLNexusSystemCallEventBus:
 @instance
 async def ml_nexus_system_call_semaphore():
     from asyncio import Semaphore
+
     return Semaphore(20)
 
 
 @injected
 async def a_system_parallel(
-        logger,
-        ml_nexus_default_subprocess_limit,
-        ml_nexus_system_call_event_bus,
-        ml_nexus_system_call_semaphore,
-        /,
-        command: str, env: dict = None, working_dir=None):
+    logger,
+    ml_nexus_default_subprocess_limit,
+    ml_nexus_system_call_event_bus,
+    ml_nexus_system_call_semaphore,
+    /,
+    command: str,
+    env: dict = None,
+    working_dir=None,
+):
     new_env = os.environ.copy()
     if env is not None:
         new_env.update(env)
@@ -289,7 +302,9 @@ async def a_system_parallel(
     # color = random_hex_color()
     async with ml_nexus_system_call_semaphore:
         stream_id = uuid.uuid4().hex[:12]
-        await ml_nexus_system_call_event_bus(SystemCallStart(id=stream_id, command=command))
+        await ml_nexus_system_call_event_bus(
+            SystemCallStart(id=stream_id, command=command)
+        )
 
         # prev_state = await a_get_stty_state()
 
@@ -310,19 +325,22 @@ async def a_system_parallel(
         async def task_decode_stream(stream) -> str:
             lines = ""
             async for line in yield_from_stream_safe(stream):
-                await ml_nexus_system_call_event_bus(SystemCallStdOut(id=stream_id, command=command, text=line))
+                await ml_nexus_system_call_event_bus(
+                    SystemCallStdOut(id=stream_id, command=command, text=line)
+                )
                 lines += line.decode()[:-1] + "\n"
             return lines
 
         # stdout_future = stream_and_capture_output(proc.stdout, stream_id=stream_id + "_stdout", color=color)
         # stderr_future = stream_and_capture_output(proc.stderr, stream_id=stream_id + "_stderr", color=color)
         stdout, stderr = await asyncio.gather(
-            task_decode_stream(proc.stdout),
-            task_decode_stream(proc.stderr)
+            task_decode_stream(proc.stdout), task_decode_stream(proc.stderr)
         )
 
         result: int = await proc.wait()  # Wait for the subprocess to exit
-        await ml_nexus_system_call_event_bus(SystemCallEnd(id=stream_id, command=command, code=result))
+        await ml_nexus_system_call_event_bus(
+            SystemCallEnd(id=stream_id, command=command, code=result)
+        )
         # logger.info(f"command finished with:\n{stdout},{stderr}\nExitCode:{result}")
         if result == 0:
             # logger.success(f"command <<{command}>> finished with ExitCode:{result}")
@@ -335,7 +353,7 @@ async def a_system_parallel(
                 f"\nstderr: {stderr}",
                 code=result,
                 stdout=stdout,
-                stderr=stderr
+                stderr=stderr,
             )
     return PsResult(stdout, stderr, exit_code=result)
 
@@ -349,27 +367,35 @@ async def system_lock():
 
 
 @injected
-async def a_system_sequential(system_lock, a_system_parallel: SystemCall, /, command: str, env: dict = None,
-                              working_dir=None):
+async def a_system_sequential(
+    system_lock,
+    a_system_parallel: SystemCall,
+    /,
+    command: str,
+    env: dict = None,
+    working_dir=None,
+):
     async with system_lock:
         return await a_system_parallel(command, env, working_dir)
 
 
 @instance
-async def test_a_system_newlines(
-        new_RsyncArgs,
-        a_system):
+async def test_a_system_newlines(new_RsyncArgs, a_system):
     async with TaskGroup() as tg:
         rsync = new_RsyncArgs(".", "/tmp/test", hardlink=True)
         for i in range(10):
             tg.create_task(rsync.run())
 
+
 @injected
 async def a_system_secret(
-        ml_nexus_system_call_semaphore,
-        ml_nexus_default_subprocess_limit,
-        /,
-        command: str, env: dict = None, working_dir=None):
+    ml_nexus_system_call_semaphore,
+    ml_nexus_default_subprocess_limit,
+    /,
+    command: str,
+    env: dict = None,
+    working_dir=None,
+):
     new_env = os.environ.copy()
     if env is not None:
         new_env.update(env)
@@ -393,9 +419,9 @@ async def a_system_secret(
             async for line in yield_from_stream_safe(stream):
                 lines += line.decode()[:-1] + "\n"
             return lines
+
         stdout, stderr = await asyncio.gather(
-            task_decode_stream(proc.stdout),
-            task_decode_stream(proc.stderr)
+            task_decode_stream(proc.stdout), task_decode_stream(proc.stderr)
         )
 
         result: int = await proc.wait()  # Wait for the subprocess to exit
@@ -408,12 +434,9 @@ async def a_system_secret(
                 f"\nstderr: {stderr}",
                 code=result,
                 stdout=stdout,
-                stderr=stderr
+                stderr=stderr,
             )
     return PsResult(stdout, stderr, exit_code=result)
 
-__meta_design__ = design(
-    overrides=design(
-        new_RsyncArgs=injected(RsyncArgs)
-    )
-)
+
+__meta_design__ = design(overrides=design(new_RsyncArgs=injected(RsyncArgs)))

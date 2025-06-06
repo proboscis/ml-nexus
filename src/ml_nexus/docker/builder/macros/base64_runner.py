@@ -4,6 +4,7 @@ from pinjected import *
 
 from ml_nexus.docker.builder.macros.macro_defs import RCopy
 
+
 @instance
 async def script_base64_runner():
     return """
@@ -39,12 +40,11 @@ exit $exit_status
 """
 
 
-
 @instance
 async def macro_install_base64_runner(script_base64_runner: str):
     script_path = Path("~/.cache/base64_runner.sh").expanduser()
     script_path.write_text(script_base64_runner)
     return [
         RCopy(src=script_path, dst=Path("/usr/local/bin/base64_runner.sh")),
-        "RUN chmod +x /usr/local/bin/base64_runner.sh"
+        "RUN chmod +x /usr/local/bin/base64_runner.sh",
     ]

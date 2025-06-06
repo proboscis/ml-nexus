@@ -14,34 +14,33 @@ from ml_nexus.schematics import ContainerSchematic
 
 
 @injected
-async def a_docker_ps(
-        logger,
-        ml_nexus_docker_build_context,
-        /,
-        docker_host
-):
+async def a_docker_ps(logger, ml_nexus_docker_build_context, /, docker_host):
     # Build docker command with context if specified
-    docker_cmd = f"docker --context {ml_nexus_docker_build_context}" if ml_nexus_docker_build_context else "docker"
-    
+    docker_cmd = (
+        f"docker --context {ml_nexus_docker_build_context}"
+        if ml_nexus_docker_build_context
+        else "docker"
+    )
+
     # Determine if we need SSH based on context and host
     if ml_nexus_docker_build_context:
         # When using Docker context, no SSH needed - context handles remote connection
         cmd = f"{docker_cmd} ps -a --format '{{{{json .}}}}'"
     elif docker_host and docker_host not in ["localhost", "127.0.0.1"]:
         # Remote host without context - use SSH
-        cmd = f"ssh {docker_host} \"{docker_cmd} ps -a --format '{{{{json .}}}}'\"" 
+        cmd = f"ssh {docker_host} \"{docker_cmd} ps -a --format '{{{{json .}}}}'\""
     else:
         # Local Docker
         cmd = f"{docker_cmd} ps -a --format '{{{{json .}}}}'"
-    
+
     ps = await asyncio.subprocess.create_subprocess_shell(
-        cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE
+        cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
     )
     stdout, stderr = await ps.communicate()
 
-    data = [json.loads(line.strip()) for line in stdout.decode().split("\n") if line.strip()]
+    data = [
+        json.loads(line.strip()) for line in stdout.decode().split("\n") if line.strip()
+    ]
     df = pd.DataFrame(data)
     if not df.empty:
         df.set_index("Names", inplace=True)
@@ -67,7 +66,7 @@ class PersistentDockerEnvFromSchematics(IScriptRunner):
             project=self.project,
             schematics=self.schematics,
             docker_host=self.docker_host,
-            docker_options=["--name", self.container_name]
+            docker_options=["--name", self.container_name],
         )
         self.container_task = None
         self.container_wait_lock = asyncio.Lock()
@@ -104,15 +103,17 @@ class PersistentDockerEnvFromSchematics(IScriptRunner):
         if await self.a_is_container_ready():
             self._logger.info(f"Container {self.container_name} is already running")
         else:
-            self._logger.warning(f"Container {self.container_name} is not running. Starting...")
-            self.container_task = asyncio.create_task(self.container.run_script_without_init(
-                "sleep infinity"
-            ))
+            self._logger.warning(
+                f"Container {self.container_name} is not running. Starting..."
+            )
+            self.container_task = asyncio.create_task(
+                self.container.run_script_without_init("sleep infinity")
+            )
         await self.a_wait_container_ready()
         await self.container.prepare_mounts()  # ensuring source/resource uploads
         self._logger.info(f"Container {self.container_name} is ready")
 
-    async def run_script(self, script: str) -> 'PsResult':
+    async def run_script(self, script: str) -> "PsResult":
         """
         1. ensure the container is running
         2. send base64 encoded script and run it via docker exec
@@ -126,19 +127,20 @@ class PersistentDockerEnvFromSchematics(IScriptRunner):
 {init_script}
 {script}
 """
-        base64_encoded_script = base64.b64encode(final_script.encode('utf-8')).decode()
+        base64_encoded_script = base64.b64encode(final_script.encode("utf-8")).decode()
         docker_cmd = self._get_docker_cmd()
         cmd = f"{docker_cmd} exec {self.container_name} bash /usr/local/bin/base64_runner.sh {base64_encoded_script}"
         # await self._a_system(f'ssh {self.docker_host} {cmd}')
         result = await self._a_system(cmd)
-        
+
         if result.exit_code != 0:
             from ml_nexus.util import CommandException
+
             raise CommandException(
                 f"Script execution failed with exit code {result.exit_code}",
                 code=result.exit_code,
                 stdout=result.stdout,
-                stderr=result.stderr
+                stderr=result.stderr,
             )
         return result
 
@@ -152,30 +154,42 @@ class PersistentDockerEnvFromSchematics(IScriptRunner):
         # ensure path exists
         # await self._a_system(f"ssh {self.docker_host} docker exec {self.container_name} mkdir -p {remote_path.parent}")
         docker_cmd = self._get_docker_cmd()
-        await self._a_system(f"{docker_cmd} exec {self.container_name} mkdir -p {remote_path.parent}")
+        await self._a_system(
+            f"{docker_cmd} exec {self.container_name} mkdir -p {remote_path.parent}"
+        )
         # wait, this copies file from the docker_host, hmm..
-        await self._a_system(f"{docker_cmd} cp {local_path} {self.container_name}:{remote_path}")
+        await self._a_system(
+            f"{docker_cmd} cp {local_path} {self.container_name}:{remote_path}"
+        )
 
     async def download(self, remote_path: Path, local_path: Path):
         await self.ensure_container()
         docker_cmd = self._get_docker_cmd()
-        await self._a_system(f"{docker_cmd} cp {self.container_name}:{remote_path} {local_path}")
+        await self._a_system(
+            f"{docker_cmd} cp {self.container_name}:{remote_path} {local_path}"
+        )
 
     async def delete(self, remote_path: Path):
         await self.ensure_container()
         # await self._a_system(f"ssh {self.docker_host} docker exec {self.container_name} rm -rf {remote_path}")
         docker_cmd = self._get_docker_cmd()
-        await self._a_system(f"{docker_cmd} exec {self.container_name} rm -rf {remote_path}")
+        await self._a_system(
+            f"{docker_cmd} exec {self.container_name} rm -rf {remote_path}"
+        )
 
     async def sync_from_container(self, remote_path: Path, local_path: Path):
         await self.ensure_container()
         docker_cmd = self._get_docker_cmd()
-        await self._a_system(f"rsync -avz -e '{docker_cmd} exec -i' {self.container_name}:{remote_path} {local_path}")
+        await self._a_system(
+            f"rsync -avz -e '{docker_cmd} exec -i' {self.container_name}:{remote_path} {local_path}"
+        )
 
     async def sync_to_container(self, local_path: Path, remote_path: Path):
         await self.ensure_container()
         docker_cmd = self._get_docker_cmd()
-        await self._a_system(f"rsync -avz -e '{docker_cmd} exec -i' {local_path} {self.container_name}:{remote_path}")
+        await self._a_system(
+            f"rsync -avz -e '{docker_cmd} exec -i' {local_path} {self.container_name}:{remote_path}"
+        )
 
     def random_remote_path(self):
         tmp_name = uuid.uuid4().hex[:8]
@@ -188,5 +202,5 @@ class PersistentDockerEnvFromSchematics(IScriptRunner):
             delete_remote=self.delete,
             download_remote=self.download,
             local_download_path=self._env_result_download_path,
-            env=self
+            env=self,
         )

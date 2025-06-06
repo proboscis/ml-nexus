@@ -1,5 +1,4 @@
 import shlex
-import sys
 from dataclasses import dataclass
 
 from pinjected import *
@@ -12,7 +11,7 @@ import pinjected
 
 
 @injected
-async def _run_command_with_env(env: IRunner, tgt_var_path: str ):
+async def _run_command_with_env(env: IRunner, tgt_var_path: str):
     cmd = f"python -m pinjected run {tgt_var_path}"
     if hasattr(env, "pinjected_additional_args"):
         for k, v in env.pinjected_additional_args.items():
@@ -22,18 +21,18 @@ async def _run_command_with_env(env: IRunner, tgt_var_path: str ):
 
 # this is the entry point
 run_command_with_env = _run_command_with_env(
-    injected('target_environment'),
-    injected('target_variable'),
+    injected("target_environment"),
+    injected("target_variable"),
 )
 
 
 @injected
 def add_configs_from_envs(
-        command_environments: list[ModuleVarPath],
-        interpreter_path,
-        default_working_dir,
-        /,
-        tgt: ModuleVarSpec
+    command_environments: list[ModuleVarPath],
+    interpreter_path,
+    default_working_dir,
+    /,
+    tgt: ModuleVarSpec,
 ) -> list[IdeaRunConfiguration]:
     res = []
     tgt_script_path = ModuleVarPath(tgt.var_path).module_file_path
@@ -45,7 +44,9 @@ def add_configs_from_envs(
         res.append(
             IdeaRunConfiguration(
                 name=f"submit {var_name} to env: {env.var_name}",
-                script_path=str(pinjected.__file__).replace("__init__.py", "__main__.py"),
+                script_path=str(pinjected.__file__).replace(
+                    "__init__.py", "__main__.py"
+                ),
                 interpreter_path=interpreter_path,
                 arguments=[
                     "run",
@@ -73,12 +74,9 @@ TEST_ENV: Injected = TestEnv()
 
 @instance
 async def test_run():
-    print('hello')
+    print("hello")
+
 
 __meta_design__ = providers(
     custom_idea_config_creator=add_configs_from_envs,
-) + instances(
-    command_environments=[
-        ModuleVarPath("ml_nexus.idea_plugins.TEST_ENV")
-    ]
-)
+) + instances(command_environments=[ModuleVarPath("ml_nexus.idea_plugins.TEST_ENV")])

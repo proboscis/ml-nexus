@@ -5,8 +5,6 @@ into pytest-compatible test functions that can be discovered and run
 by pytest normally.
 """
 
-import sys
-import os
 from pathlib import Path
 from typing import Dict, Any, Optional
 import importlib.util
@@ -17,15 +15,15 @@ from pinjected.test.injected_pytest import _to_pytest
 
 def convert_module_iproxy_tests(module_path: str) -> Dict[str, Any]:
     """Convert all IProxy test objects in a module to pytest functions
-    
+
     Args:
         module_path: Path to the module file or dotted module name
-        
+
     Returns:
         Dictionary of test name to pytest function mappings
     """
     # Handle file path or module name
-    if module_path.endswith('.py'):
+    if module_path.endswith(".py"):
         # Load module from file path
         module_name = Path(module_path).stem
         spec = importlib.util.spec_from_file_location(module_name, module_path)
@@ -35,37 +33,37 @@ def convert_module_iproxy_tests(module_path: str) -> Dict[str, Any]:
     else:
         # Import by module name
         module = importlib.import_module(module_path)
-        file_path = getattr(module, '__file__', module_path)
-    
+        file_path = getattr(module, "__file__", module_path)
+
     # Get module design
-    module_design = getattr(module, '__meta_design__', design())
-    
+    module_design = getattr(module, "__meta_design__", design())
+
     pytest_tests = {}
-    
+
     # Find all IProxy objects with test_ prefix
     for name in dir(module):
-        if not name.startswith('test_'):
+        if not name.startswith("test_"):
             continue
-            
+
         obj = getattr(module, name)
         if isinstance(obj, IProxy):
             # Convert to pytest function
             pytest_func = _to_pytest(obj, module_design, file_path)
             pytest_tests[name] = pytest_func
-    
+
     return pytest_tests
 
 
 def create_pytest_module(source_module: str, output_file: str) -> None:
     """Create a new pytest module file with converted IProxy tests
-    
+
     Args:
         source_module: Path to module containing IProxy tests
         output_file: Path where to write the pytest module
     """
     # Convert IProxy tests
     pytest_tests = convert_module_iproxy_tests(source_module)
-    
+
     # Generate pytest module content
     content = f'''"""Auto-generated pytest module from {source_module}
 
@@ -81,15 +79,15 @@ _pytest_tests = convert_module_iproxy_tests("{source_module}")
 
 # Create module-level test functions
 '''
-    
+
     # Add each test function
     for test_name, test_func in pytest_tests.items():
         content += f"\n{test_name} = _pytest_tests['{test_name}']"
-    
+
     # Write the file
-    with open(output_file, 'w') as f:
+    with open(output_file, "w") as f:
         f.write(content)
-    
+
     print(f"Created pytest module: {output_file}")
     print(f"Found {len(pytest_tests)} IProxy tests:")
     for name in pytest_tests:
@@ -99,24 +97,24 @@ _pytest_tests = convert_module_iproxy_tests("{source_module}")
 # Decorator approach for manual conversion
 def as_pytest_test(iproxy: IProxy, module_design: Optional[Any] = None):
     """Decorator to convert an IProxy object to a pytest function
-    
+
     Usage:
         @as_pytest_test
         test_something: IProxy = my_iproxy_function()
-        
+
         # Or with explicit design
         test_something = as_pytest_test(my_iproxy, module_design=design(...))
     """
     import inspect
-    
+
     # Get caller's frame to find the file path
     frame = inspect.currentframe().f_back
-    file_path = frame.f_globals.get('__file__', '<unknown>')
-    
+    file_path = frame.f_globals.get("__file__", "<unknown>")
+
     # Use provided design or try to get from caller's module
     if module_design is None:
-        module_design = frame.f_globals.get('__meta_design__', design())
-    
+        module_design = frame.f_globals.get("__meta_design__", design())
+
     # Convert to pytest function
     return _to_pytest(iproxy, module_design, file_path)
 
@@ -124,23 +122,23 @@ def as_pytest_test(iproxy: IProxy, module_design: Optional[Any] = None):
 # Example usage function
 def convert_current_module():
     """Convert IProxy tests in the current module to pytest functions
-    
+
     Usage (at the bottom of a test module):
         if __name__ == "__main__":
             from test.pytest_iproxy_adapter import convert_current_module
             convert_current_module()
     """
     import inspect
-    
+
     # Get caller's module
     frame = inspect.currentframe().f_back
     module_globals = frame.f_globals
-    module_file = module_globals.get('__file__', '<unknown>')
-    module_design = module_globals.get('__meta_design__', design())
-    
+    module_file = module_globals.get("__file__", "<unknown>")
+    module_design = module_globals.get("__meta_design__", design())
+
     # Find and convert IProxy tests
     for name, obj in module_globals.items():
-        if name.startswith('test_') and isinstance(obj, IProxy):
+        if name.startswith("test_") and isinstance(obj, IProxy):
             # Convert and update in module
             pytest_func = _to_pytest(obj, module_design, module_file)
             module_globals[name] = pytest_func
@@ -150,14 +148,14 @@ def convert_current_module():
 # CLI utility
 if __name__ == "__main__":
     import argparse
-    
+
     parser = argparse.ArgumentParser(description="Convert IProxy tests to pytest")
     parser.add_argument("source", help="Source module path or file")
     parser.add_argument("-o", "--output", help="Output file path")
     parser.add_argument("--list", action="store_true", help="Just list IProxy tests")
-    
+
     args = parser.parse_args()
-    
+
     if args.list:
         tests = convert_module_iproxy_tests(args.source)
         print(f"Found {len(tests)} IProxy tests in {args.source}:")

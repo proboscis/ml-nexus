@@ -35,58 +35,86 @@ async def a_infer_source_kind(path: Path):
         case (Success(_), Success(_), _):
             return "rye"
         case (Success(_), Failure(), _):
-            return 'uv'
+            return "uv"
         case (Failure(), _, Success(_)):
-            return 'source'
+            return "source"
         case (Failure(), Failure(), Failure()):
-            return 'resource'
+            return "resource"
 
 
 @injected
 async def gather_rsync_macros_project_def(
-        storage_resolver,
-        patch_rye_project,
-        patch_uv_dir,
-        new_RsyncArgs,
-        a_infer_source_kind,
-        logger,
-        /,
-        pro: ProjectDef) -> list[Macro]:
+    storage_resolver,
+    patch_rye_project,
+    patch_uv_dir,
+    new_RsyncArgs,
+    a_infer_source_kind,
+    logger,
+    /,
+    pro: ProjectDef,
+) -> list[Macro]:
     res = []
     async with TaskGroup() as tg:
+
         async def task(pdir):
-            kind = await a_infer_source_kind(pdir.path) if pdir.kind == "auto" else pdir.kind
+            kind = (
+                await a_infer_source_kind(pdir.path)
+                if pdir.kind == "auto"
+                else pdir.kind
+            )
             if kind == "source":
                 local_path = await storage_resolver.locate(pdir.id)
-                return new_RsyncArgs(src=local_path, dst=Path('/sources') / pdir.id, excludes=pdir.excludes)
+                return new_RsyncArgs(
+                    src=local_path,
+                    dst=Path("/sources") / pdir.id,
+                    excludes=pdir.excludes,
+                )
             elif kind == "uv":
+
                 @asynccontextmanager
                 async def macro_impl(cxt):
-                    async with patch_uv_dir(tgt=pdir, placement=pro.placement) as patched_path:
+                    async with patch_uv_dir(
+                        tgt=pdir, placement=pro.placement
+                    ) as patched_path:
                         yield [
                             f"#Copy patched uv project:{pdir.id}",
-                            new_RsyncArgs(src=patched_path, dst=pro.placement.sources_root / pdir.id,
-                                      excludes=pdir.excludes)
+                            new_RsyncArgs(
+                                src=patched_path,
+                                dst=pro.placement.sources_root / pdir.id,
+                                excludes=pdir.excludes,
+                            ),
                         ]
 
                 return macro_impl
             elif kind == "rye":
+
                 @asynccontextmanager
                 async def macro_impl(cxt):
                     # this is to prevent patching to run before building.
-                    async with patch_rye_project(tgt=pdir, source_root=pro.placement.sources_root) as patched_path:
+                    async with patch_rye_project(
+                        tgt=pdir, source_root=pro.placement.sources_root
+                    ) as patched_path:
                         yield [
                             f"#Copy patched rye project:{pdir.id}",
-                            new_RsyncArgs(src=patched_path, dst=pro.placement.sources_root / pdir.id,
-                                      excludes=pdir.excludes)
+                            new_RsyncArgs(
+                                src=patched_path,
+                                dst=pro.placement.sources_root / pdir.id,
+                                excludes=pdir.excludes,
+                            ),
                         ]
 
                 return macro_impl
             elif kind == "setup.py":
                 local_path = await storage_resolver.locate(pdir.id)
-                return new_RsyncArgs(src=local_path, dst=Path('/sources') / pdir.id, excludes=pdir.excludes)
-            elif kind == 'resource':
-                logger.info(f"resource is to be mounted so not included in the container.")
+                return new_RsyncArgs(
+                    src=local_path,
+                    dst=Path("/sources") / pdir.id,
+                    excludes=pdir.excludes,
+                )
+            elif kind == "resource":
+                logger.info(
+                    f"resource is to be mounted so not included in the container."
+                )
             else:
                 raise ValueError(f"unknown kind {kind} for pdir {pdir.id}")
 

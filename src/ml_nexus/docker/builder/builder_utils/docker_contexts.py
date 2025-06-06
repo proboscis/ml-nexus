@@ -9,7 +9,7 @@ async def f_install_gcloud_command(a_system):
     install gcloud command
     """
     try:
-        a_system('gcloud --version')
+        a_system("gcloud --version")
     except Exception:
         await a_system("curl -sSL https://sdk.cloud.google.com | bash")
 
@@ -17,6 +17,7 @@ async def f_install_gcloud_command(a_system):
 @injected
 async def a_tag_to_repo(tag: str):
     return tag.split("/")[0]
+
 
 @injected
 async def a_setup_docker_credentials(tag):
@@ -26,14 +27,15 @@ async def a_setup_docker_credentials(tag):
     """
     pass
 
+
 @injected
 async def a_setup_docker_credentials__gcp(
-        service_account_json_for_docker_push: str,
-        a_system,
-        f_install_gcloud_command,
-        a_tag_to_repo,
-        /,
-        tag
+    service_account_json_for_docker_push: str,
+    a_system,
+    f_install_gcloud_command,
+    a_tag_to_repo,
+    /,
+    tag,
 ):
     """
     Set up gcloud authentication for Google Container Registry using service account key.
@@ -46,11 +48,13 @@ async def a_setup_docker_credentials__gcp(
 
     # Create a temporary file for the service account key that will be auto-deleted
     with tempfile.NamedTemporaryFile() as temp_file:
-        temp_file.write(service_account_json_for_docker_push.encode('utf-8'))
+        temp_file.write(service_account_json_for_docker_push.encode("utf-8"))
         temp_file.flush()
 
         # Activate service account with the key file
-        await a_system(f"gcloud auth activate-service-account --key-file={temp_file.name}")
+        await a_system(
+            f"gcloud auth activate-service-account --key-file={temp_file.name}"
+        )
 
         # Configure Docker to use gcloud credentials for Google Container Registry
         repo = await a_tag_to_repo(tag)
@@ -58,17 +62,19 @@ async def a_setup_docker_credentials__gcp(
 
 
 @injected
-async def a_docker_push__local(a_system, a_setup_docker_credentials, ml_nexus_docker_build_context, logger, /, tag):
+async def a_docker_push__local(
+    a_system, a_setup_docker_credentials, ml_nexus_docker_build_context, logger, /, tag
+):
     """
     Push docker image to registry with optional docker context
     """
     await a_setup_docker_credentials(tag)
-    
+
     docker_cmd = "docker"
     if ml_nexus_docker_build_context:
         logger.info(f"Using Docker context for push: {ml_nexus_docker_build_context}")
         docker_cmd = f"docker --context {ml_nexus_docker_build_context}"
-    
+
     await a_system(f"{docker_cmd} push {tag}")
 
 

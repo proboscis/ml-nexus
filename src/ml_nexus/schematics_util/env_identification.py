@@ -6,7 +6,9 @@ from pinjected import *
 from pydantic import BaseModel
 from returns.result import ResultE, safe, Success, Failure
 from beartype import beartype
+from loguru import logger
 
+from ml_nexus import load_env_design
 from ml_nexus.project_structure import ProjectDef
 
 
@@ -46,7 +48,15 @@ class SourceSchema(BaseModel):
 
 
 class IdentifiedSchema(BaseModel):
-    schema: RyeSchema | PoetrySchema | UVSchema | RequirementsTxtSchema | SetupPySchema | ReadmeSchema | SourceSchema
+    schema: (
+        RyeSchema
+        | PoetrySchema
+        | UVSchema
+        | RequirementsTxtSchema
+        | SetupPySchema
+        | ReadmeSchema
+        | SourceSchema
+    )
     justification: str
 
 
@@ -139,28 +149,45 @@ Yeah someday I could do that...
 #     )
 #     return res
 
+
 @injected
 @beartype
-async def a_identify_project_schema(new_ProjectContext, logger, /, repo: Path) -> IdentifiedSchema:
+async def a_identify_project_schema(
+    new_ProjectContext, logger, /, repo: Path
+) -> IdentifiedSchema:
     cxt: ProjectContext = new_ProjectContext(repo=repo)
     match (cxt.setup_py, cxt.requirements_txt, cxt.pyproject, cxt.readme):
         case (Success(setup_py), Failure(), Failure(), _):
-            return IdentifiedSchema(schema=SetupPySchema(type='setup.py'), justification="only setup.py exists")
+            return IdentifiedSchema(
+                schema=SetupPySchema(type="setup.py"),
+                justification="only setup.py exists",
+            )
         case (Failure(), Success(requirements_txt), Failure(), _):
-            return IdentifiedSchema(schema=RequirementsTxtSchema(type='requirements.txt'),
-                                    justification="only requirements.txt exists")
+            return IdentifiedSchema(
+                schema=RequirementsTxtSchema(type="requirements.txt"),
+                justification="only requirements.txt exists",
+            )
         case (Failure(), Failure(), Success(pyproject), _):
             if "poetry" in pyproject:
-                return IdentifiedSchema(schema=PoetrySchema(type='poetry'),
-                                        justification="only pyproject.toml exists and 'poetry' is found")
+                return IdentifiedSchema(
+                    schema=PoetrySchema(type="poetry"),
+                    justification="only pyproject.toml exists and 'poetry' is found",
+                )
             elif "rye" in pyproject:
-                return IdentifiedSchema(schema=RyeSchema(type='rye'),
-                                        justification="only pyproject.toml exists and 'rye' is found")
+                return IdentifiedSchema(
+                    schema=RyeSchema(type="rye"),
+                    justification="only pyproject.toml exists and 'rye' is found",
+                )
             else:
-                return IdentifiedSchema(schema=UVSchema(type='uv'),
-                                        justification="only pyproject.toml exists 'defaulting to uv'")
+                return IdentifiedSchema(
+                    schema=UVSchema(type="uv"),
+                    justification="only pyproject.toml exists 'defaulting to uv'",
+                )
         case (Failure(), Failure(), Failure(), Success(readme)):
-            return IdentifiedSchema(schema=ReadmeSchema(type='README.md'), justification="only README.md exists")
+            return IdentifiedSchema(
+                schema=ReadmeSchema(type="README.md"),
+                justification="only README.md exists",
+            )
         case (Failure(), Failure(), Failure(), Failure()):
             raise NotImplementedError("No files found")
         case _:
@@ -173,7 +200,9 @@ class RequirementsTxt:
 
 
 @injected
-async def a_generate_requirements_txt_from_readme(a_cached_llm_for_ml_nexus, /, readme: str):
+async def a_generate_requirements_txt_from_readme(
+    a_cached_llm_for_ml_nexus, /, readme: str
+):
     prompt = f"""
 Please generate a requirements.txt from the following README.md:
 ```markdown
@@ -185,28 +214,28 @@ Please generate a requirements.txt from the following README.md:
 
 @injected
 async def a_schema_to_setup_script_with_deps(
-        new_ProjectContext,
-        /,
-        schema: IdentifiedSchema,
-        repo: Path,
+    new_ProjectContext,
+    /,
+    schema: IdentifiedSchema,
+    repo: Path,
 ):
     cxt = new_ProjectContext(repo=repo)
     match schema.schema:
         case RyeSchema():
             script = "rye sync"
-            deps = ['rye']
+            deps = ["rye"]
         case PoetrySchema():
             script = "poetry install"
-            deps = ['poetry']
+            deps = ["poetry"]
         case UVSchema():
             script = "uv sync"
-            deps = ['uv']
+            deps = ["uv"]
         case RequirementsTxtSchema():
             script = "pip install -r requirements.txt"
-            deps = ['pyvenv', 'requirements.txt']
+            deps = ["pyvenv", "requirements.txt"]
         case SetupPySchema():
             script = "pip install -e ."
-            deps = ['pyvenv', 'setup.py']
+            deps = ["pyvenv", "setup.py"]
         #         case ReadmeSchema():
         #             # let's generate requirements.txt
         #             src = cxt.readme.unwrap()
@@ -228,73 +257,83 @@ async def a_schema_to_setup_script_with_deps(
 
 @injected
 async def a_prepare_setup_script_with_deps(
-        a_identify_project_schema,
-        a_schema_to_setup_script_with_deps,
-        storage_resolver,
-        new_ProjectContext,
-        /,
-        target: ProjectDef,
+    a_identify_project_schema,
+    a_schema_to_setup_script_with_deps,
+    storage_resolver,
+    new_ProjectContext,
+    /,
+    target: ProjectDef,
 ):
     repo = await storage_resolver.locate(target.dirs[0].id)
     match target.dirs[0].kind:
-        case 'auto':
+        case "auto":
             schema = await a_identify_project_schema(repo)
-        case 'auto-embed':
+        case "auto-embed":
             # Auto-detect but use embedded dependencies
             base_schema = await a_identify_project_schema(repo)
             # Mark UV and requirements.txt projects for embedded handling
             if isinstance(base_schema.schema, UVSchema):
                 return SetupScriptWithDeps(
-                    cxt=new_ProjectContext(repo=repo), 
+                    cxt=new_ProjectContext(repo=repo),
                     script="uv sync",
-                    env_deps=['uv-embedded']
+                    env_deps=["uv-embedded"],
                 )
             elif isinstance(base_schema.schema, RequirementsTxtSchema):
                 return SetupScriptWithDeps(
-                    cxt=new_ProjectContext(repo=repo), 
+                    cxt=new_ProjectContext(repo=repo),
                     script="pip install -r requirements.txt",
-                    env_deps=['pyvenv', 'requirements.txt-embedded']
+                    env_deps=["pyvenv", "requirements.txt-embedded"],
                 )
             else:
                 # For other projects, fall back to regular handling
                 return await a_schema_to_setup_script_with_deps(base_schema, repo)
-        case 'source':
-            schema = IdentifiedSchema(schema=SourceSchema(type='source'), justification="directly set source")
-        case 'uv':
-            schema = IdentifiedSchema(schema=UVSchema(type='uv'), justification="directly set uv")
-        case 'rye':
-            schema = IdentifiedSchema(schema=RyeSchema(type='rye'),justification="directly set rye")
-        case 'poetry':
-            schema = IdentifiedSchema(schema=PoetrySchema(type='poetry'),justification="directly set poetry")
-        case 'pyvenv-embed':
+        case "source":
+            schema = IdentifiedSchema(
+                schema=SourceSchema(type="source"), justification="directly set source"
+            )
+        case "uv":
+            schema = IdentifiedSchema(
+                schema=UVSchema(type="uv"), justification="directly set uv"
+            )
+        case "rye":
+            schema = IdentifiedSchema(
+                schema=RyeSchema(type="rye"), justification="directly set rye"
+            )
+        case "poetry":
+            schema = IdentifiedSchema(
+                schema=PoetrySchema(type="poetry"), justification="directly set poetry"
+            )
+        case "pyvenv-embed":
             # Detect if it's setup.py or requirements.txt based project
-            if (repo / 'setup.py').exists():
+            if (repo / "setup.py").exists():
                 return SetupScriptWithDeps(
-                    cxt=new_ProjectContext(repo=repo), 
+                    cxt=new_ProjectContext(repo=repo),
                     script="pip install -e .",
-                    env_deps=['pyvenv-embedded', 'setup.py']
+                    env_deps=["pyvenv-embedded", "setup.py"],
                 )
-            elif (repo / 'requirements.txt').exists():
+            elif (repo / "requirements.txt").exists():
                 return SetupScriptWithDeps(
-                    cxt=new_ProjectContext(repo=repo), 
+                    cxt=new_ProjectContext(repo=repo),
                     script="pip install -r requirements.txt",
-                    env_deps=['pyvenv-embedded', 'requirements.txt']
+                    env_deps=["pyvenv-embedded", "requirements.txt"],
                 )
             else:
-                raise NotImplementedError(f"pyvenv-embed requires either setup.py or requirements.txt")
+                raise NotImplementedError(
+                    f"pyvenv-embed requires either setup.py or requirements.txt"
+                )
         case _:
-            raise NotImplementedError(f"kind:{target.dirs[0].kind} is not implemented for schema identification")
+            raise NotImplementedError(
+                f"kind:{target.dirs[0].kind} is not implemented for schema identification"
+            )
     return await a_schema_to_setup_script_with_deps(schema, repo)
 
 
-test_identify_project_schema: IProxy = a_identify_project_schema(
-    test_repo := Path(".")
-)
+test_identify_project_schema: IProxy = a_identify_project_schema(test_repo := Path("."))
 test_schema_to_setup_script_with_deps: IProxy = a_schema_to_setup_script_with_deps(
     test_identify_project_schema, test_repo
 )
-test_prepare_setup_script_with_deps: IProxy = a_prepare_setup_script_with_deps(test_repo)
-
-__meta_design__ = design(
-
+test_prepare_setup_script_with_deps: IProxy = a_prepare_setup_script_with_deps(
+    test_repo
 )
+
+__design__ = load_env_design + design(logger=logger)

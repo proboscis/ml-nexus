@@ -1,6 +1,11 @@
 from typing import Final
 
-from ml_nexus.util import SystemCallStart, SystemCallStdOut, SystemCallStdErr, SystemCallEnd
+from ml_nexus.util import (
+    SystemCallStart,
+    SystemCallStdOut,
+    SystemCallStdErr,
+    SystemCallEnd,
+)
 from pinjected import injected
 import re
 
@@ -35,4 +40,3 @@ async def handle_ml_nexus_system_call_events__simple(logger, /, e):
         logger.error(f"Error handling system call event: {e} \n {ex}")
 
         raise ex
-

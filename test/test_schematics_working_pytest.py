@@ -12,4 +12,4 @@ _pytest_tests = convert_module_iproxy_tests("test/test_schematics_working_kinds.
 
 # Create module-level test functions
 
-test_working = _pytest_tests['test_working']
+test_working = _pytest_tests["test_working"]

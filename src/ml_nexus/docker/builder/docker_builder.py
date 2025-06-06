@@ -24,7 +24,11 @@ class DockerBuilderComponent:
         return replace(self, scripts=self.scripts + [script])
 
     def __add__(self, other: "DockerBuilderComponent") -> "DockerBuilderComponent":
-        return replace(self, macros=self.macros + other.macros, scripts=self.scripts + other.scripts)
+        return replace(
+            self,
+            macros=self.macros + other.macros,
+            scripts=self.scripts + other.scripts,
+        )
 
 
 @dataclass
@@ -32,6 +36,7 @@ class DockerBuilder:
     """
     TODO make it possible to declare cache mounts for optimization.
     """
+
     _logger: object
     _build_image_with_macro: BuildImageWithMacro
     _build_entrypoint_script: Callable[[list[str]], Awaitable[str]]
@@ -45,7 +50,6 @@ class DockerBuilder:
     metadata: dict = None
     platform: str = "linux/amd64"
 
-
     def __post_init__(self):
         """
         Docker builder is stateful, due to its macro being ContextManager
@@ -56,16 +60,19 @@ class DockerBuilder:
         self.built = asyncio.Event()
         if self.name is None:
             self.name = self.base_image.replace("/", "_").replace(":", "_")
-            self._logger.warning(f"Name not provided for DockerBuilder, using base_image as name: {self.name}")
+            self._logger.warning(
+                f"Name not provided for DockerBuilder, using base_image as name: {self.name}"
+            )
         if self.metadata is None:
             self.metadata = {}
 
-
-    def assert_macros_not_acontextmanager(self,macro):
+    def assert_macros_not_acontextmanager(self, macro):
         def dfs(macro):
             match macro:
                 case acon if is_async_context_manager(acon):
-                    raise ValueError(f"Macro {acon} is an async context manager, which is not supported in DockerBuilder")
+                    raise ValueError(
+                        f"Macro {acon} is an async context manager, which is not supported in DockerBuilder"
+                    )
                 case [*macros]:
                     for m in macros:
                         dfs(m)
@@ -75,21 +82,22 @@ class DockerBuilder:
                     pass
                 case unknown:
                     raise ValueError(f"Unknown type {type(unknown)} in macro {unknown}")
+
         dfs(macro)
 
     async def a_build(self, tag: str, use_cache=True) -> str:
         async with self.build_lock:
             if self.built.is_set():
-                self._logger.warning(f"Image already built, skipping build for {self.name}")
+                self._logger.warning(
+                    f"Image already built, skipping build for {self.name}"
+                )
                 return tag
-            script = await self._build_entrypoint_script(
-                self.scripts
-            )
+            script = await self._build_entrypoint_script(self.scripts)
             self._logger.info(f"Generated Entrypoint script: \n{script}")
             macros = [
                 f"FROM {self.base_image} as {self.base_stage_name}",
                 *self.macros,
-                await self._get_macro_entrypoint_installation(script)
+                await self._get_macro_entrypoint_installation(script),
             ]
 
             res = await self._build_image_with_macro(
@@ -97,11 +105,10 @@ class DockerBuilder:
                 tag,
                 use_cache=use_cache,
                 build_id=self.name,
-                options=" --platform " + self.platform
+                options=" --platform " + self.platform,
             )
             self.built.set()
             return res
-
 
     def add_macro(self, macro: Macro) -> "DockerBuilder":
         return replace(self, macros=self.macros + [macro])
@@ -118,16 +125,17 @@ class DockerBuilder:
         return await self._build_entrypoint_script(self.scripts)
 
     def __add__(self, other: DockerBuilderComponent) -> "DockerBuilder":
-        return replace(self, macros=self.macros + other.macros, scripts=self.scripts + other.scripts)
+        return replace(
+            self,
+            macros=self.macros + other.macros,
+            scripts=self.scripts + other.scripts,
+        )
 
     def add_metadata(self, **kwargs):
         return replace(self, metadata={**self.metadata, **kwargs})
 
 
-VenvDockerBuilder = Annotated[
-    DockerBuilder,
-    Is[lambda x: 'venv_path' in x.metadata]
-]
+VenvDockerBuilder = Annotated[DockerBuilder, Is[lambda x: "venv_path" in x.metadata]]
 
 
 @dataclass
@@ -138,6 +146,8 @@ class DockerService:
     use_cache: bool = True
 
     async def a_build_and_push(self):
-        image = await self.builder.a_build(self.tag_name_provider(), use_cache=self.use_cache)
+        image = await self.builder.a_build(
+            self.tag_name_provider(), use_cache=self.use_cache
+        )
         await self.docker_tag_pusher(image)
         return image

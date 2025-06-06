@@ -15,7 +15,16 @@ import pandas as pd
 @dataclass
 class ProjectDir:
     id: str
-    kind: Literal['source', 'resource', 'auto', 'auto-embed', 'rye', 'uv', 'setup.py', 'pyvenv-embed'] = 'auto'
+    kind: Literal[
+        "source",
+        "resource",
+        "auto",
+        "auto-embed",
+        "rye",
+        "uv",
+        "setup.py",
+        "pyvenv-embed",
+    ] = "auto"
     dependencies: list["ProjectDir"] = field(default_factory=list)
     excludes: list[str] = field(default_factory=list)
     extra_dependencies: list["PlatformDependantPypi"] = field(default_factory=list)
@@ -31,6 +40,7 @@ class ProjectPlacement:
     """
     a class to hold policy for placing sources and resources
     """
+
     sources_root: Path
     resources_root: Path
 
@@ -72,6 +82,7 @@ class ProjectDef:
 # the basic structure
 # IEnvironmentFactory -> IRunner
 
+
 @dataclass
 class ScriptRunResult:
     run_id: str
@@ -79,7 +90,6 @@ class ScriptRunResult:
 
 
 class IRunner(ABC):
-
     @abc.abstractmethod
     async def run(self, command: str):
         pass
@@ -92,7 +102,7 @@ class ScriptRunContext:
     delete_remote: Callable[[Path], Awaitable]
     download_remote: Callable[[Path, Path], Awaitable]
     local_download_path: Path
-    env: 'IScriptRunner'
+    env: "IScriptRunner"
 
     preparation: Optional[Callable[[], Awaitable]] = None
     _upload_mapping: dict[Path, Path] = field(default_factory=dict)
@@ -101,10 +111,9 @@ class ScriptRunContext:
     def upload_mapping(self) -> dict[Path, Path]:
         return self._upload_mapping
 
-    def with_upload(self,
-                    *local_paths,
-                    uploads: dict[Path, Path] = None
-                    ) -> 'ScriptRunContext':
+    def with_upload(
+        self, *local_paths, uploads: dict[Path, Path] = None
+    ) -> "ScriptRunContext":
         def parse(p):
             match p:
                 case str():
@@ -134,10 +143,7 @@ class ScriptRunContext:
             mapping[local] = remote
             mapped.append(remote)
 
-        return replace(
-            self,
-            _upload_mapping=self.upload_mapping | mapping
-        )
+        return replace(self, _upload_mapping=self.upload_mapping | mapping)
 
     async def run_script(self, script: str) -> ScriptRunResult:
         if self.preparation is not None:
@@ -149,10 +155,12 @@ class ScriptRunContext:
             for local, remote in self.upload_mapping.items():
                 tg.create_task(self.upload_remote(local, remote))
 
-        upload_envs = "\n".join([
-            f"export UPLOAD_{i}={remote}"
-            for i, remote in enumerate(self.upload_mapping.values())
-        ])
+        upload_envs = "\n".join(
+            [
+                f"export UPLOAD_{i}={remote}"
+                for i, remote in enumerate(self.upload_mapping.values())
+            ]
+        )
 
         set_result_env = f"""
 mkdir -p {result_dir}
@@ -169,19 +177,15 @@ export RUN_RESULT_DIR={result_dir}
             for remote in self.upload_mapping.values():
                 tg.create_task(self.delete_remote(remote))
             tg.create_task(self.delete_remote(result_dir))
-        return ScriptRunResult(
-            run_id=run_id,
-            result_path=download_dst
-        )
+        return ScriptRunResult(run_id=run_id, result_path=download_dst)
 
 
 class IScriptRunner(IRunner):
-
     def run_context(self) -> ScriptRunContext:
         raise NotImplementedError()
 
     @abc.abstractmethod
-    async def run_script(self, script: str) -> 'PsResult':
+    async def run_script(self, script: str) -> "PsResult":
         pass
 
     async def run(self, command: str):

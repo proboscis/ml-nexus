@@ -9,6 +9,7 @@ from ml_nexus.docker.builder.macros.macro_defs import Macro, _Macro
 @dataclass
 class CacheMountRequest:
     """to be mounted for persistent cache, like pip's cache"""
+
     name: str
     mount_point: Path
 
@@ -19,6 +20,7 @@ ResourceID = str
 @dataclass
 class ResolveMountRequest:
     """to be mounted using storage_resolver, inside container"""
+
     kind: str
     resource_id: ResourceID
     mount_point: Path
@@ -28,6 +30,7 @@ class ResolveMountRequest:
 @dataclass
 class DirectMountRequest:
     """to be mounted directly, inside container"""
+
     source: Path
     mount_point: Path
     excludes: list[str] = field(default_factory=list)
@@ -38,11 +41,10 @@ class ContextualMountRequest:
     """
     This is for sources that generates path just before mounting.
     """
+
     source: Callable[[], AsyncContextManager[Path]]
     mount_point: Path
     excludes: list[str] = field(default_factory=list)
-
-
 
 
 @dataclass
@@ -50,7 +52,9 @@ class ContainerScript:
     script: str
 
 
-MountRequest = Union[CacheMountRequest, ResolveMountRequest, DirectMountRequest, ContextualMountRequest]
+MountRequest = Union[
+    CacheMountRequest, ResolveMountRequest, DirectMountRequest, ContextualMountRequest
+]
 SchematicElement = Union[MountRequest, Macro, ContainerScript]
 
 

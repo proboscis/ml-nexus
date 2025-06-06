@@ -72,6 +72,7 @@ class DirectoryStorageResolver(IStorageResolver):
     """
     Treats a directory's subdirectories as storage items.
     """
+
     root: Path
     id_to_path: dict[str, Path] = field(default_factory=dict)
 
@@ -85,7 +86,7 @@ class DirectoryStorageResolver(IStorageResolver):
         return self.id_to_path[id]
 
     async def sync(self):
-        for sub_dir in tqdm(self.root.iterdir(),f"scanning {self.root}"):
+        for sub_dir in tqdm(self.root.iterdir(), f"scanning {self.root}"):
             if sub_dir.is_dir():
                 self.id_to_path[sub_dir.name] = sub_dir.absolute()
 
@@ -107,11 +108,14 @@ class YamlStorageResolver(IStorageResolver):
         :return:
         """
         from loguru import logger
+
         for root_path in tqdm(self.root_paths, desc="scanning"):
             logger.info(f"scanning {root_path}")
             root_path: Path
-            for path in tqdm(root_path.glob("*/.storage_info.yaml"),
-                             desc=f"globbing .storage_info.yaml files in {root_path}"):
+            for path in tqdm(
+                root_path.glob("*/.storage_info.yaml"),
+                desc=f"globbing .storage_info.yaml files in {root_path}",
+            ):
                 info = yaml.load(Path(path).read_text(), Loader=yaml.SafeLoader)
                 item = StorageItem.model_validate(info)
                 assert isinstance(item, StorageItem)
@@ -127,7 +131,6 @@ class YamlStorageResolver(IStorageResolver):
 
 @instance
 async def test_yaml_storage_manager():
-    from loguru import logger
     # logger.info(StorageInfo(items=[StorageItem(id="test", path=Path("test"))]).model_dump_json())
     manager = DirectoryStorageResolver(Path("~/repos").expanduser().absolute())
     await manager.sync()
@@ -136,8 +139,8 @@ async def test_yaml_storage_manager():
 
 @injected
 async def local_storage_resolver(
-        source_root: Path = Path("~/sources").expanduser().absolute(),
-        resource_root: Path = Path("~/resources").expanduser().absolute(),
+    source_root: Path = Path("~/sources").expanduser().absolute(),
+    resource_root: Path = Path("~/resources").expanduser().absolute(),
 ):
     sources_resolver = DirectoryStorageResolver(source_root)
     resource_resolver = DirectoryStorageResolver(resource_root)
@@ -155,6 +158,4 @@ async def IdPath(storage_resolver: IStorageResolver, /, id: str) -> Path:
     return await storage_resolver.locate(id)
 
 
-__design__ = instances(
-
-)
+__design__ = instances()

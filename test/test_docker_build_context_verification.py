@@ -14,9 +14,11 @@ import uuid
 
 # Test storage resolver
 TEST_PROJECT_ROOT = Path(__file__).parent / "dummy_projects"
-test_storage_resolver = StaticStorageResolver({
-    "test_uv": TEST_PROJECT_ROOT / "test_uv",
-})
+test_storage_resolver = StaticStorageResolver(
+    {
+        "test_uv": TEST_PROJECT_ROOT / "test_uv",
+    }
+)
 
 # Test design with zeus context
 test_design = design(
@@ -26,9 +28,7 @@ test_design = design(
 )
 
 # Module design
-__meta_design__ = design(
-    overrides=load_env_design + test_design
-)
+__meta_design__ = design(overrides=load_env_design + test_design)
 
 
 # ===== Test Docker context injection =====
@@ -36,44 +36,42 @@ __meta_design__ = design(
 async def test_docker_context_injection(ml_nexus_docker_build_context, logger):
     """Verify that Docker context is properly injected"""
     logger.info(f"Docker build context is set to: {ml_nexus_docker_build_context}")
-    assert ml_nexus_docker_build_context == "zeus", f"Expected 'zeus', got '{ml_nexus_docker_build_context}'"
+    assert ml_nexus_docker_build_context == "zeus", (
+        f"Expected 'zeus', got '{ml_nexus_docker_build_context}'"
+    )
     logger.info("✅ Docker context injection verified")
 
 
 # ===== Test Docker build with context =====
 @injected_pytest(test_design)
 async def test_docker_build_with_context(
-    new_DockerBuilder,
-    a_build_docker,
-    ml_nexus_docker_build_context,
-    logger
+    new_DockerBuilder, a_build_docker, ml_nexus_docker_build_context, logger
 ):
     """Test that a_build_docker uses the specified context"""
     logger.info(f"Testing Docker build with context: {ml_nexus_docker_build_context}")
-    
+
     # Create a simple Docker builder
-    builder = new_DockerBuilder(
-        base_image="python:3.11-slim",
-        name="test-zeus-context"
-    )
-    
+    builder = new_DockerBuilder(base_image="python:3.11-slim", name="test-zeus-context")
+
     # Add a simple script to verify
     builder = builder.add_script("echo 'Built with Zeus context'")
-    
+
     # Generate unique tag
     tag = f"ml-nexus-test-zeus:{uuid.uuid4().hex[:8]}"
-    
+
     try:
         # Build the image - this should use zeus context
-        logger.info(f"Building image {tag} using context {ml_nexus_docker_build_context}")
+        logger.info(
+            f"Building image {tag} using context {ml_nexus_docker_build_context}"
+        )
         result = await builder.a_build(tag, use_cache=False)
-        
+
         assert result == tag, f"Expected tag {tag}, got {result}"
         logger.info(f"✅ Successfully built image {tag} with zeus context")
-        
+
         # Note: We can't easily verify the context was used without checking Docker logs
         # but the build should succeed if zeus context is properly configured
-        
+
     except Exception as e:
         logger.error(f"Build failed: {e}")
         raise
@@ -83,22 +81,23 @@ async def test_docker_build_with_context(
 @injected_pytest(test_design)
 async def test_context_override(logger):
     """Test that context can be overridden in design"""
-    
+
     # Create a new design with different context
     with design(ml_nexus_docker_build_context="colima"):
+
         @injected
         async def check_context(ml_nexus_docker_build_context):
             return ml_nexus_docker_build_context
-        
+
         context = await check_context()
         assert context == "colima", f"Expected 'colima', got '{context}'"
         logger.info("✅ Context override works correctly")
-    
+
     # Verify original context is still zeus
     @injected
     async def check_original(ml_nexus_docker_build_context):
         return ml_nexus_docker_build_context
-    
+
     original = await check_original()
     assert original == "zeus", f"Expected 'zeus', got '{original}'"
     logger.info("✅ Original context preserved")

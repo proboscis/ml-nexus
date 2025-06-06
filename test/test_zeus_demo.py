@@ -12,13 +12,16 @@ from loguru import logger
 TEST_PROJECT_ROOT = Path(__file__).parent / "dummy_projects"
 
 # Storage resolver
-test_storage_resolver = StaticStorageResolver({
-    "test_uv": TEST_PROJECT_ROOT / "test_uv",
-})
+test_storage_resolver = StaticStorageResolver(
+    {
+        "test_uv": TEST_PROJECT_ROOT / "test_uv",
+    }
+)
 
 # Configure with zeus context
 __meta_design__ = design(
-    overrides=load_env_design + design(
+    overrides=load_env_design
+    + design(
         storage_resolver=test_storage_resolver,
         logger=logger,
         ml_nexus_docker_build_context="zeus",
@@ -39,40 +42,39 @@ async def a_demo_zeus_schematics(
     new_DockerEnvFromSchematics,
     ml_nexus_docker_build_context,
     logger,
-    /
+    /,
 ):
     """Demo running DockerEnvFromSchematics with zeus context"""
     logger.info(f"Starting demo with Docker context: {ml_nexus_docker_build_context}")
-    
+
     # Create simple project
     project = ProjectDef(dirs=[ProjectDir("test_uv", kind="uv")])
-    
+
     # Generate schematic
     logger.info("Generating schematics...")
     schematic = await schematics_universal(
-        target=project,
-        base_image='python:3.11-slim'
+        target=project, base_image="python:3.11-slim"
     )
-    
+
     # Create Docker environment
     logger.info("Creating DockerEnvFromSchematics...")
     docker_env = new_DockerEnvFromSchematics(
-        project=project,
-        schematics=schematic,
-        docker_host="zeus"
+        project=project, schematics=schematic, docker_host="zeus"
     )
-    
+
     # Run simple test
     logger.info("Running test script...")
-    result = await docker_env.run_script("""
+    result = await docker_env.run_script(
+        """
     echo "Running on Zeus with context: $HOSTNAME"
     python --version
     echo "Docker build context was: {context}"
-    """.format(context=ml_nexus_docker_build_context))
-    
+    """.format(context=ml_nexus_docker_build_context)
+    )
+
     logger.info(f"Result:\n{result}")
     logger.info("✅ Demo completed successfully!")
-    
+
     return result
 
 

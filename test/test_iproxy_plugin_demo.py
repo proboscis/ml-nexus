@@ -11,14 +11,10 @@ from ml_nexus import load_env_design
 from loguru import logger
 
 # Test design configuration
-test_design = design(
-    logger=logger
-)
+test_design = design(logger=logger)
 
 # Module configuration
-__meta_design__ = design(
-    overrides=load_env_design + test_design
-)
+__meta_design__ = design(overrides=load_env_design + test_design)
 
 
 # Test 1: Simple sync test
@@ -44,4 +40,4 @@ async def test_async_example(logger):
 def test_with_string_dep(logger, storage_resolver):
     """Test that uses injected dependencies"""
     logger.info("Running test with storage_resolver dependency")
-    assert hasattr(storage_resolver, 'locate')
+    assert hasattr(storage_resolver, "locate")
