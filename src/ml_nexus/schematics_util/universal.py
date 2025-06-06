@@ -835,8 +835,6 @@ which python
 """
 )
 
-__meta_design__ = design(
-    overrides=load_env_design + design(
-        logger=logger
-    )
+__design__ = load_env_design + design(
+    logger=logger
 )

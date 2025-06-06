@@ -342,7 +342,10 @@ EOF
                     return 0
                 else
                     log_message "Directory exists but virtualenv is not usable at $VENV_PATH"
-                    log_message "Will attempt to recreate virtualenv with --clear flag"
+                    log_message "Removing invalid virtualenv directory to recreate it"
+                    rm -rf "$VENV_PATH" 2>/dev/null || {
+                        log_message "Failed to remove invalid virtualenv, will try --clear flag"
+                    }
                 fi
             fi
         fi

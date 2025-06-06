@@ -268,14 +268,13 @@ async def a_prepare_setup_script_with_deps(
             schema = IdentifiedSchema(schema=PoetrySchema(type='poetry'),justification="directly set poetry")
         case 'pyvenv-embed':
             # Detect if it's setup.py or requirements.txt based project
-            repo_path = await storage_resolver.locate(target.dirs[0].id)
-            if (repo_path / 'setup.py').exists():
+            if (repo / 'setup.py').exists():
                 return SetupScriptWithDeps(
                     cxt=new_ProjectContext(repo=repo), 
                     script="pip install -e .",
                     env_deps=['pyvenv-embedded', 'setup.py']
                 )
-            elif (repo_path / 'requirements.txt').exists():
+            elif (repo / 'requirements.txt').exists():
                 return SetupScriptWithDeps(
                     cxt=new_ProjectContext(repo=repo), 
                     script="pip install -r requirements.txt",
