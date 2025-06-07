@@ -7,7 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Fixed pyenv component venv naming to handle special characters**
+  - Sanitized virtualenv names in `a_pyenv_component` and `a_pyenv_component_embedded` to replace problematic characters (/, \, spaces)
+  - Prevents errors when target IDs contain path separators or spaces
+  - Ensures consistent and valid virtualenv directory names across all pyenv-based projects
+- **Fixed embedded pyenv component to properly install pyenv in Docker layers**
+  - Removed cache mounts from pyenv installation in `a_pyenv_component_embedded` for proper layer caching
+  - Refactored installation to use direct git clone and bash evaluation for pyenv setup
+  - Fixed shell command execution to use bash with proper pyenv initialization
+  - Ensures pyenv is fully embedded in the Docker image without relying on external cache
+  - Improved build reliability for embedded pyenv components
+
 ### Added
+- **New test files for embedded Docker components**
+  - `test/test_embedded_pyvenv_python.py` - Comprehensive test for Python execution in pyvenv-embed containers
+  - `test/test_embedded_simple_build.py` - Simple build test for pyvenv-embed projects
+  - `test/test_embedded_uv_build.py` - Test for UV auto-embed projects with Python execution
+  - Tests verify proper Python installation, package management, and script execution in embedded containers
 - **Multi-stage Docker build support for embedded dependencies**
   - Added `a_uv_component_embedded` for UV projects with optimized dependency caching
   - Added `a_component_to_install_requirements_txt_embedded` for requirements.txt projects
