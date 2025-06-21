@@ -105,6 +105,8 @@ class DockerHostEnvironment(IScriptRunner):
     docker_builder: DockerBuilder
     docker_host: str
 
+    _ml_nexus_docker_build_context: Optional[str] = None
+
     mounter: Optional[DockerHostMounter] = None
     image_tag: Optional[str] = None
     additional_mounts: list[DockerMount] = None
@@ -153,7 +155,13 @@ class DockerHostEnvironment(IScriptRunner):
             opts = " ".join(self.docker_options)
         else:
             opts = ""
-        docker_cmd = f"docker run --gpus all --net={self.network} {self.mounter.docker_opts(self.project.placement)} {volume_options} {opts} --shm-size={self.shared_memory_size} --rm {image} {cmd}"
+
+        # Get docker command with context if specified
+        docker_base = "docker"
+        if self._ml_nexus_docker_build_context:
+            docker_base = f"docker --context {self._ml_nexus_docker_build_context}"
+
+        docker_cmd = f"{docker_base} run --gpus all --net={self.network} {self.mounter.docker_opts(self.project.placement)} {volume_options} {opts} --shm-size={self.shared_memory_size} --rm {image} {cmd}"
         return docker_cmd
 
     async def run_script(self, script: str) -> "PsResult":

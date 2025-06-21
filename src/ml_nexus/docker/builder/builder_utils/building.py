@@ -8,7 +8,7 @@ from hashlib import md5
 from pathlib import Path
 from pprint import pformat
 from tempfile import TemporaryDirectory
-from typing import Union
+from typing import Union, Optional
 
 from loguru import logger
 from pinjected import injected, instance, design
@@ -449,14 +449,22 @@ async def a_calculate_build_context_hash(logger, /, context_dir: Path) -> str:
 
 @instance
 def f_docker_login(
-    a_system, ml_nexus_docker_hub_token, ml_nexus_docker_hub_username
+    a_system,
+    ml_nexus_docker_hub_token,
+    ml_nexus_docker_hub_username,
+    ml_nexus_docker_build_context,
 ) -> PsResult:
     """
     docker login --username <username> --password-stdin
     """
+    # Build docker command with context if specified
+    docker_cmd = "docker"
+    if ml_nexus_docker_build_context:
+        docker_cmd = f"docker --context {ml_nexus_docker_build_context}"
+
     task = asyncio.create_task(
         a_system(
-            f"echo {ml_nexus_docker_hub_token} | docker login --username {ml_nexus_docker_hub_username} --password-stdin"
+            f"echo {ml_nexus_docker_hub_token} | {docker_cmd} login --username {ml_nexus_docker_hub_username} --password-stdin"
         )
     )
 
@@ -473,7 +481,7 @@ async def build_image_with_macro(
     tag,
     push=False,
     use_cache=True,
-    build_id: str = None,
+    build_id: Optional[str] = None,
     options: str = "",
 ):
     await f_docker_login
