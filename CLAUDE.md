@@ -6,6 +6,9 @@ NEVER create files unless they're absolutely necessary for achieving your goal.
 ALWAYS prefer editing an existing file to creating a new one.
 NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
 
+# Author Update
+Use Kento Masui instead of S22625 for username/presentation author
+
 # Pinjected Framework Usage Guide
 
 ## Key Concepts and Patterns
@@ -220,3 +223,4 @@ This applies to the case where a commit failed due to linter issues.
 - Respect linter rules for complexity and readability analysis. THIS IS CRITICAL.
 
 - tests around docker takes a minute so running them all at once will timeout in your shell. run each docker related test one by one in such case
+```
