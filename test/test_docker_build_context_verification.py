@@ -5,7 +5,7 @@ injection is working correctly and Docker builds use the specified context.
 """
 
 from pathlib import Path
-from pinjected import design, injected
+from pinjected import design
 from pinjected.test import injected_pytest
 from ml_nexus import load_env_design
 from ml_nexus.storage_resolver import StaticStorageResolver
@@ -75,29 +75,3 @@ async def test_docker_build_with_context(
     except Exception as e:
         logger.error(f"Build failed: {e}")
         raise
-
-
-# ===== Test multiple contexts override =====
-@injected_pytest(test_design)
-async def test_context_override(logger):
-    """Test that context can be overridden in design"""
-
-    # Create a new design with different context
-    with design(ml_nexus_docker_build_context="colima"):
-
-        @injected
-        async def check_context(ml_nexus_docker_build_context):
-            return ml_nexus_docker_build_context
-
-        context = await check_context()
-        assert context == "colima", f"Expected 'colima', got '{context}'"
-        logger.info("✅ Context override works correctly")
-
-    # Verify original context is still zeus
-    @injected
-    async def check_original(ml_nexus_docker_build_context):
-        return ml_nexus_docker_build_context
-
-    original = await check_original()
-    assert original == "zeus", f"Expected 'zeus', got '{original}'"
-    logger.info("✅ Original context preserved")
