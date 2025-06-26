@@ -165,6 +165,10 @@ def __load_default_design():
     from ml_nexus.docker.builder.docker_env_with_schematics import (
         DockerEnvFromSchematics,
     )
+    from ml_nexus.docker.builder.persistent import (
+        PersistentDockerEnvFromSchematics,
+        a_docker_ps,
+    )
     from pinjected_openai.vision_llm import a_cached_vision_llm__gpt4o
     from ml_nexus.docker.builder.builder_utils.schematics_for_setup_py import (
         macro_install_pyenv_virtualenv_installer,
@@ -210,6 +214,10 @@ def __load_default_design():
         ml_nexus_default_subprocess_limit=128 * 1024,
         a_macro_install_pyenv=a_macro_install_pyenv,
         new_DockerEnvFromSchematics=injected(DockerEnvFromSchematics),
+        new_PersistentDockerEnvFromSchematics=injected(
+            PersistentDockerEnvFromSchematics
+        ),
+        a_docker_ps=a_docker_ps,
         a_cached_llm_for_ml_nexus=a_cached_vision_llm__gpt4o,
         ml_nexus_default_base_image="nvidia/cuda:12.3.1-devel-ubuntu22.04",
         ml_nexus_default_python_version="3.12",
