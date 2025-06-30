@@ -167,6 +167,7 @@ def __load_default_design():
     )
     from ml_nexus.docker.builder.persistent import (
         PersistentDockerEnvFromSchematics,
+        a_PersistentDockerEnvFromSchematics,
         a_docker_ps,
     )
     from pinjected_openai.vision_llm import a_cached_vision_llm__gpt4o
@@ -217,6 +218,7 @@ def __load_default_design():
         new_PersistentDockerEnvFromSchematics=injected(
             PersistentDockerEnvFromSchematics
         ),
+        a_PersistentDockerEnvFromSchematics=a_PersistentDockerEnvFromSchematics,
         a_docker_ps=a_docker_ps,
         a_cached_llm_for_ml_nexus=a_cached_vision_llm__gpt4o,
         ml_nexus_default_base_image="nvidia/cuda:12.3.1-devel-ubuntu22.04",
