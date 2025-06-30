@@ -11,20 +11,24 @@ if TYPE_CHECKING:
 from pinjected.compatibility.task_group import TaskGroup
 import pandas as pd
 
+# Type alias for all possible project kinds
+ProjectKind = Literal[
+    "source",
+    "resource",
+    "auto",
+    "auto-embed",
+    "rye",
+    "uv",
+    "setup.py",
+    "pyvenv-embed",
+    "uv-pip-embed",
+]
+
 
 @dataclass
 class ProjectDir:
     id: str
-    kind: Literal[
-        "source",
-        "resource",
-        "auto",
-        "auto-embed",
-        "rye",
-        "uv",
-        "setup.py",
-        "pyvenv-embed",
-    ] = "auto"
+    kind: ProjectKind = "auto"
     dependencies: list["ProjectDir"] = field(default_factory=list)
     excludes: list[str] = field(default_factory=list)
     extra_dependencies: list["PlatformDependantPypi"] = field(default_factory=list)

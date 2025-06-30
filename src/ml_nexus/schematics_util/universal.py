@@ -21,7 +21,7 @@ from ml_nexus.docker.builder.persistent import PersistentDockerEnvFromSchematics
 from ml_nexus.project_structure import ProjectDef, ProjectDir
 from ml_nexus.schematics import MountRequest, CacheMountRequest, ContainerSchematic
 from ml_nexus.schematics_util.env_identification import SetupScriptWithDeps
-from ml_nexus.storage_resolver import IStorageResolver
+from ml_nexus.storage_resolver import IStorageResolver, StaticStorageResolver
 
 """
 We create a function that generates a schematics for universal project structure.
@@ -228,6 +228,137 @@ source {venv_path}/bin/activate
         ],
         init_script=[f"cd {target.default_working_dir}", activation_script.strip()],
         dependencies=[base_apt_packages_component],
+        mounts=[],  # No cache mounts for embedded components - everything is in the image
+    )
+
+
+@injected
+async def a_uv_pip_component_embedded(
+    a_macro_install_uv: Callable,
+    base_apt_packages_component: EnvComponent,
+    rust_cargo_component: EnvComponent,
+    ml_nexus_github_credential_component: EnvComponent,
+    storage_resolver: IStorageResolver,
+    new_RsyncArgs: "NewRsyncArgs",
+    logger: "loguru.Logger",
+    /,
+    target: ProjectDef,
+    python_version: str = "3.12",
+) -> EnvComponent:
+    """
+    UV component with embedded dependencies using uv pip install instead of uv add.
+    This uses uv for Python installation and virtual environment management,
+    but uses pip-style dependency installation without pyproject.toml.
+
+    Docker layer structure:
+    1. Layer 1: Install build dependencies and uv
+    2. Layer 2: Install Python version using uv
+    3. Layer 3: Create virtualenv using uv venv
+    4. Layer 4: Install dependencies with uv pip install
+    5. Layer 5: Copy source code
+    6. Layer 6: Install package with setup.py (if exists)
+    """
+    target_id = target.dirs[0].id
+    local_project_dir = await storage_resolver.locate(target.dirs[0].id)
+
+    # Sanitize target_id for use as venv name
+    sanitized_venv_name = (
+        target_id.replace("/", "_").replace("\\", "_").replace(" ", "_")
+    )
+
+    venv_path = Path(
+        f"/root/virtualenvs/{sanitized_venv_name}_{sha256(target_id.encode()).hexdigest()[:6]}"
+    )
+
+    # Build uv installation and Python setup macros
+    uv_python_install_macros = [
+        # Install uv
+        await a_macro_install_uv(),
+        # Install Python version using uv
+        f'RUN bash -c "source $HOME/.cargo/env && uv python install {python_version}"',
+        # Create virtualenv directory
+        f"RUN mkdir -p /root/virtualenvs",
+        # Create the virtualenv using uv with specific Python version
+        f'RUN bash -c "source $HOME/.cargo/env && uv venv {venv_path} --python {python_version}"',
+    ]
+
+    # Check for dependency files
+    requirements_path = local_project_dir / "requirements.txt"
+    setup_py_path = local_project_dir / "setup.py"
+
+    # Build dependency installation layer
+    dependency_install_macro = []
+    if requirements_path.exists():
+        # Copy requirements.txt and install dependencies
+        dependency_install_macro = [
+            RCopy(
+                src=requirements_path,
+                dst=Path(target.default_working_dir) / "requirements.txt",
+            ),
+            f"WORKDIR {target.default_working_dir}",
+            # Activate venv and install requirements using uv pip
+            f'RUN --mount=type=cache,target=/root/.cache/pip bash -c "source $HOME/.cargo/env && source {venv_path}/bin/activate && uv pip install --upgrade pip && uv pip install -r requirements.txt"',
+        ]
+
+    # Copy all project files (excluding common build artifacts)
+    project_copy_macro = [
+        new_RsyncArgs(
+            src=local_project_dir,
+            dst=Path(target.default_working_dir),
+            excludes=[
+                "__pycache__",
+                "*.pyc",
+                ".git",
+                ".ruff_cache",
+                ".pytest_cache",
+                "build",
+                "dist",
+                "*.egg-info",
+                ".mypy_cache",
+                ".tox",
+                ".coverage",
+                "htmlcov",
+                ".cache",
+                "node_modules",
+                ".env",
+                ".DS_Store",
+                "venv",
+                "env",
+                ".venv",
+                ".pyenv",
+            ],
+        )
+    ]
+
+    # If setup.py exists, install it after source code is copied
+    final_install = []
+    if setup_py_path.exists():
+        # Activate venv and install package using uv pip
+        final_install.append(
+            f'RUN --mount=type=cache,target=/root/.cache/pip bash -c "source $HOME/.cargo/env && source {venv_path}/bin/activate && cd {target.default_working_dir} && uv pip install -e ."'
+        )
+
+    # Activation script for runtime
+    activation_script = f"""
+echo "Initializing uv environment..."
+source $HOME/.cargo/env
+echo "ACTIVATING VENV at {venv_path}"
+source {venv_path}/bin/activate
+"""
+
+    return EnvComponent(
+        installation_macro=[
+            *uv_python_install_macros,  # Install uv and Python, create venv
+            *dependency_install_macro,  # Install dependencies
+            *project_copy_macro,  # Copy source code
+            *final_install,  # Install package if setup.py exists
+        ],
+        init_script=[f"cd {target.default_working_dir}", activation_script.strip()],
+        dependencies=[
+            base_apt_packages_component,
+            rust_cargo_component,
+            ml_nexus_github_credential_component,
+        ],
         mounts=[],  # No cache mounts for embedded components - everything is in the image
     )
 
@@ -663,6 +794,7 @@ async def schematics_universal(
     a_rye_component: Callable,
     a_uv_component: Callable,
     a_uv_component_embedded: Callable,
+    a_uv_pip_component_embedded: Callable,
     storage_resolver: IStorageResolver,
     ml_nexus_default_base_image: str,
     ml_nexus_default_python_version: str,
@@ -732,6 +864,12 @@ async def schematics_universal(
                 python_components.append(await a_uv_component(target=target))
             case "uv-embedded":
                 python_components.append(await a_uv_component_embedded(target=target))
+            case "uv-pip-embedded":
+                python_components.append(
+                    await a_uv_pip_component_embedded(
+                        target=target, python_version=python_version
+                    )
+                )
             case "poetry":
                 raise NotImplementedError("poetry is not supported yet")
 
@@ -896,5 +1034,79 @@ which python
 """
     )
 )
+
+
+# Test for uv-pip-embed project with requirements.txt
+# Create a test resolver that maps to actual test directories
+@instance
+def test_uv_pip_embed_storage_resolver():
+    test_dir = Path(__file__).parent.parent.parent / "test" / "dummy_projects"
+    return StaticStorageResolver(
+        {
+            "test/dummy_projects/test_requirements": test_dir / "test_requirements",
+            "test/dummy_projects/test_setuppy": test_dir / "test_setuppy",
+        }
+    )
+
+
+# Create test instances with custom storage resolver
+test_uv_pip_embed_project: IProxy = ProjectDef(
+    dirs=[ProjectDir(id="test/dummy_projects/test_requirements", kind="uv-pip-embed")]
+)
+
+# Create schematics - storage resolver will come from the design
+test_schematics_uv_pip_embed: IProxy = schematics_universal(
+    target=test_uv_pip_embed_project, python_version="3.11"
+)
+
+test_uv_pip_embed_docker: IProxy = injected(PersistentDockerEnvFromSchematics)(
+    project=test_uv_pip_embed_project,
+    schematics=test_schematics_uv_pip_embed,
+    docker_host="zeus",
+    container_name="test_uv_pip_embed_docker",
+)
+
+test_uv_pip_embed_docker_run: IProxy = test_uv_pip_embed_docker.run_script(
+    """
+echo "Testing uv-pip-embed project with requirements.txt"
+ls -lah
+python --version
+pip list
+which python
+uv --version
+"""
+)
+
+# Test for uv-pip-embed project with setup.py
+test_uv_pip_embed_setuppy_project: IProxy = ProjectDef(
+    dirs=[ProjectDir(id="test/dummy_projects/test_setuppy", kind="uv-pip-embed")]
+)
+
+test_schematics_uv_pip_embed_setuppy: IProxy = schematics_universal(
+    target=test_uv_pip_embed_setuppy_project, python_version="3.11"
+)
+
+test_uv_pip_embed_setuppy_docker: IProxy = injected(PersistentDockerEnvFromSchematics)(
+    project=test_uv_pip_embed_setuppy_project,
+    schematics=test_schematics_uv_pip_embed_setuppy,
+    docker_host="zeus",
+    container_name="test_uv_pip_embed_setuppy_docker",
+)
+
+test_uv_pip_embed_setuppy_docker_run: IProxy = (
+    test_uv_pip_embed_setuppy_docker.run_script(
+        """
+echo "Testing uv-pip-embed project with setup.py"
+ls -lah
+python --version
+pip list
+which python
+uv --version
+"""
+    )
+)
+
+# Simple tests to preview Dockerfiles for uv-pip-embed
+# Note: DockerBuilder doesn't have get_dockerfile() method - dockerfile is generated during build
 
 __design__ = load_env_design + design(logger=logger)
