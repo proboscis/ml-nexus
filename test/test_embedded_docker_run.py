@@ -1,18 +1,17 @@
 """Test embedded components by actually running Python scripts in Docker containers"""
 
 from pathlib import Path
-from pinjected import *
-from ml_nexus.schematics_util.universal import schematics_universal
-from ml_nexus.docker.builder.persistent import PersistentDockerEnvFromSchematics
+from pinjected import design
+from pinjected.test import injected_pytest
+from ml_nexus import load_env_design
 from ml_nexus.project_structure import ProjectDef, ProjectDir
 from ml_nexus.storage_resolver import StaticStorageResolver
-from ml_nexus import load_env_design
 from loguru import logger
 
 # Create storage resolver for test projects
 TEST_PROJECT_ROOT = Path(__file__).parent / "dummy_projects"
 
-test_storage_resolver = StaticStorageResolver(
+_storage_resolver = StaticStorageResolver(
     {
         "test_uv": TEST_PROJECT_ROOT / "test_uv",
         "test_requirements": TEST_PROJECT_ROOT / "test_requirements",
@@ -21,25 +20,56 @@ test_storage_resolver = StaticStorageResolver(
 )
 
 # Test design configuration
-test_design = load_env_design + design(
-    storage_resolver=test_storage_resolver,
+_design = load_env_design + design(
+    storage_resolver=_storage_resolver,
     logger=logger,
     ml_nexus_default_base_image="python:3.11-slim",
     docker_host="local",  # Use local Docker
 )
 
-# Test 1: Auto-embed UV project
-test_uv_project = ProjectDef(dirs=[ProjectDir("test_uv", kind="auto-embed")])
-test_uv_schematic: IProxy = schematics_universal(target=test_uv_project)
-test_uv_docker = injected(PersistentDockerEnvFromSchematics)(
-    project=test_uv_project,
-    schematics=test_uv_schematic,
-    docker_host="local",
-    container_name="test_embed_uv",
-)
 
-# Run Python script to verify UV dependencies
-test_uv_run: IProxy = test_uv_docker.run_script("""
+# Test 1: Auto-embed UV project
+@injected_pytest(_design)
+async def test_uv_auto_embed_schematic(schematics_universal, logger):
+    """Test UV auto-embed schematic generation"""
+    logger.info("Testing UV auto-embed schematic generation")
+    
+    project = ProjectDef(dirs=[ProjectDir("test_uv", kind="auto-embed")])
+    schematic = await schematics_universal(target=project)
+    
+    assert schematic is not None
+    assert schematic.builder is not None
+    
+    logger.info("✅ UV auto-embed schematic created successfully")
+
+
+@injected_pytest(_design)
+async def test_uv_auto_embed_docker_run(
+    schematics_universal,
+    a_PersistentDockerEnvFromSchematics,
+    logger
+):
+    """Test UV auto-embed Docker container with Python execution"""
+    logger.info("Testing UV auto-embed Docker container")
+    
+    # Create project and schematic
+    project = ProjectDef(dirs=[ProjectDir("test_uv", kind="auto-embed")])
+    schematic = await schematics_universal(target=project)
+    
+    # Create Docker environment
+    docker_env = await a_PersistentDockerEnvFromSchematics(
+        project=project,
+        schematics=schematic,
+        docker_host="local",
+        container_name="test_embed_uv",
+    )
+    
+    # Start container
+    await docker_env.start()
+    
+    try:
+        # Run Python script to verify UV dependencies
+        result = await docker_env.run_script("""
 echo "=== Testing UV auto-embed project ==="
 python --version
 echo "--- Checking UV installation ---"
@@ -64,24 +94,65 @@ except ImportError as e:
 echo "--- Running project main.py ---"
 cd /sources/test_uv
 python main.py || echo "main.py execution failed"
-""")
+        """)
+        
+        logger.info(f"Test result:\n{result}")
+        
+        # Verify the test ran successfully
+        assert result is not None
+        assert "✓ requests" in result
+        assert "✓ pydantic" in result
+        
+    finally:
+        # Clean up
+        try:
+            await docker_env.stop()
+        except Exception as e:
+            logger.warning(f"Failed to stop container: {e}")
+
 
 # Test 2: Pyvenv-embed with requirements.txt
-test_pyvenv_project = ProjectDef(
-    dirs=[ProjectDir("test_requirements", kind="pyvenv-embed")]
-)
-test_pyvenv_schematic: IProxy = schematics_universal(
-    target=test_pyvenv_project, python_version="3.11"
-)
-test_pyvenv_docker = injected(PersistentDockerEnvFromSchematics)(
-    project=test_pyvenv_project,
-    schematics=test_pyvenv_schematic,
-    docker_host="local",
-    container_name="test_embed_pyvenv",
-)
+@injected_pytest(_design)
+async def test_pyvenv_embed_schematic(schematics_universal, logger):
+    """Test pyvenv-embed schematic generation"""
+    logger.info("Testing pyvenv-embed schematic generation")
+    
+    project = ProjectDef(dirs=[ProjectDir("test_requirements", kind="pyvenv-embed")])
+    schematic = await schematics_universal(target=project, python_version="3.11")
+    
+    assert schematic is not None
+    assert schematic.builder is not None
+    
+    logger.info("✅ Pyvenv-embed schematic created successfully")
 
-# Run Python script to verify pyenv dependencies
-test_pyvenv_run: IProxy = test_pyvenv_docker.run_script("""
+
+@injected_pytest(_design)
+async def test_pyvenv_embed_docker_run(
+    schematics_universal,
+    a_PersistentDockerEnvFromSchematics,
+    logger
+):
+    """Test pyvenv-embed Docker container with Python execution"""
+    logger.info("Testing pyvenv-embed Docker container")
+    
+    # Create project and schematic
+    project = ProjectDef(dirs=[ProjectDir("test_requirements", kind="pyvenv-embed")])
+    schematic = await schematics_universal(target=project, python_version="3.11")
+    
+    # Create Docker environment
+    docker_env = await a_PersistentDockerEnvFromSchematics(
+        project=project,
+        schematics=schematic,
+        docker_host="local",
+        container_name="test_embed_pyvenv",
+    )
+    
+    # Start container
+    await docker_env.start()
+    
+    try:
+        # Run Python script to verify pyenv dependencies
+        result = await docker_env.run_script("""
 echo "=== Testing pyvenv-embed project ==="
 python --version
 which python
@@ -108,22 +179,68 @@ for pkg, expected_ver in deps:
 echo "--- Running app.py ---"
 cd /sources/test_requirements
 python app.py || echo "app.py execution failed"
-""")
+        """)
+        
+        logger.info(f"Test result:\n{result}")
+        
+        # Verify the test ran successfully
+        assert result is not None
+        assert "✓ requests" in result
+        assert "✓ pandas" in result
+        assert "✓ numpy" in result
+        assert "✓ flask" in result
+        assert "✓ pytest" in result
+        
+    finally:
+        # Clean up
+        try:
+            await docker_env.stop()
+        except Exception as e:
+            logger.warning(f"Failed to stop container: {e}")
+
 
 # Test 3: Auto-embed with requirements.txt
-test_req_auto_project = ProjectDef(
-    dirs=[ProjectDir("test_requirements", kind="auto-embed")]
-)
-test_req_auto_schematic: IProxy = schematics_universal(target=test_req_auto_project)
-test_req_auto_docker = injected(PersistentDockerEnvFromSchematics)(
-    project=test_req_auto_project,
-    schematics=test_req_auto_schematic,
-    docker_host="local",
-    container_name="test_embed_req_auto",
-)
+@injected_pytest(_design)
+async def test_auto_embed_requirements_schematic(schematics_universal, logger):
+    """Test auto-embed schematic generation with requirements.txt"""
+    logger.info("Testing auto-embed schematic generation with requirements.txt")
+    
+    project = ProjectDef(dirs=[ProjectDir("test_requirements", kind="auto-embed")])
+    schematic = await schematics_universal(target=project)
+    
+    assert schematic is not None
+    assert schematic.builder is not None
+    
+    logger.info("✅ Auto-embed requirements.txt schematic created successfully")
 
-# Run Python script to verify auto-detected requirements.txt
-test_req_auto_run: IProxy = test_req_auto_docker.run_script("""
+
+@injected_pytest(_design)
+async def test_auto_embed_requirements_docker_run(
+    schematics_universal,
+    a_PersistentDockerEnvFromSchematics,
+    logger
+):
+    """Test auto-embed Docker container with requirements.txt"""
+    logger.info("Testing auto-embed Docker container with requirements.txt")
+    
+    # Create project and schematic
+    project = ProjectDef(dirs=[ProjectDir("test_requirements", kind="auto-embed")])
+    schematic = await schematics_universal(target=project)
+    
+    # Create Docker environment
+    docker_env = await a_PersistentDockerEnvFromSchematics(
+        project=project,
+        schematics=schematic,
+        docker_host="local",
+        container_name="test_embed_req_auto",
+    )
+    
+    # Start container
+    await docker_env.start()
+    
+    try:
+        # Run Python script to verify auto-detected requirements.txt
+        result = await docker_env.run_script("""
 echo "=== Testing auto-embed requirements.txt project ==="
 python --version
 pip --version
@@ -139,24 +256,67 @@ print(f'numpy: {numpy.__version__}')
 print(f'flask: {flask.__version__}')
 print(f'pytest: {pytest.__version__}')
 "
-""")
+        """)
+        
+        logger.info(f"Test result:\n{result}")
+        
+        # Verify the test ran successfully
+        assert result is not None
+        assert "✓ All imports successful" in result
+        assert "requests:" in result
+        assert "pandas:" in result
+        assert "numpy:" in result
+        
+    finally:
+        # Clean up
+        try:
+            await docker_env.stop()
+        except Exception as e:
+            logger.warning(f"Failed to stop container: {e}")
+
 
 # Test 4: Pyvenv-embed with setup.py
-test_setuppy_project = ProjectDef(
-    dirs=[ProjectDir("test_setuppy", kind="pyvenv-embed")]
-)
-test_setuppy_schematic: IProxy = schematics_universal(
-    target=test_setuppy_project, python_version="3.11"
-)
-test_setuppy_docker = injected(PersistentDockerEnvFromSchematics)(
-    project=test_setuppy_project,
-    schematics=test_setuppy_schematic,
-    docker_host="local",
-    container_name="test_embed_setuppy",
-)
+@injected_pytest(_design)
+async def test_pyvenv_embed_setuppy_schematic(schematics_universal, logger):
+    """Test pyvenv-embed schematic generation with setup.py"""
+    logger.info("Testing pyvenv-embed schematic generation with setup.py")
+    
+    project = ProjectDef(dirs=[ProjectDir("test_setuppy", kind="pyvenv-embed")])
+    schematic = await schematics_universal(target=project, python_version="3.11")
+    
+    assert schematic is not None
+    assert schematic.builder is not None
+    
+    logger.info("✅ Pyvenv-embed setup.py schematic created successfully")
 
-# Run Python script to verify setup.py installation
-test_setuppy_run: IProxy = test_setuppy_docker.run_script("""
+
+@injected_pytest(_design)
+async def test_pyvenv_embed_setuppy_docker_run(
+    schematics_universal,
+    a_PersistentDockerEnvFromSchematics,
+    logger
+):
+    """Test pyvenv-embed Docker container with setup.py"""
+    logger.info("Testing pyvenv-embed Docker container with setup.py")
+    
+    # Create project and schematic
+    project = ProjectDef(dirs=[ProjectDir("test_setuppy", kind="pyvenv-embed")])
+    schematic = await schematics_universal(target=project, python_version="3.11")
+    
+    # Create Docker environment
+    docker_env = await a_PersistentDockerEnvFromSchematics(
+        project=project,
+        schematics=schematic,
+        docker_host="local",
+        container_name="test_embed_setuppy",
+    )
+    
+    # Start container
+    await docker_env.start()
+    
+    try:
+        # Run Python script to verify setup.py installation
+        result = await docker_env.run_script("""
 echo "=== Testing pyvenv-embed with setup.py ==="
 python --version
 echo "--- Checking if package is installed ---"
@@ -176,14 +336,30 @@ try:
 except ImportError as e:
     print(f'✗ test_setuppy import failed: {e}')
 "
-""")
+        """)
+        
+        logger.info(f"Test result:\n{result}")
+        
+        # Verify the test ran successfully
+        assert result is not None
+        assert "✓ test_setuppy package imported successfully" in result
+        
+    finally:
+        # Clean up
+        try:
+            await docker_env.stop()
+        except Exception as e:
+            logger.warning(f"Failed to stop container: {e}")
 
-# Cleanup function to remove test containers
-test_cleanup: IProxy = injected(
-    lambda a_system, /: a_system(
+
+# Test cleanup function
+@injected_pytest(_design)
+async def test_cleanup_containers(a_system, logger):
+    """Clean up test containers"""
+    logger.info("Cleaning up test containers")
+    
+    await a_system(
         "docker rm -f test_embed_uv test_embed_pyvenv test_embed_req_auto test_embed_setuppy 2>/dev/null || true"
     )
-)()
-
-# Design for testing
-__meta_design__ = design(overrides=test_design)
+    
+    logger.info("✅ Test containers cleaned up")

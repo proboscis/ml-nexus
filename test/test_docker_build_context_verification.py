@@ -21,14 +21,14 @@ test_storage_resolver = StaticStorageResolver(
 )
 
 # Test design with zeus context
-test_design = design(
+test_design = load_env_design + design(
     storage_resolver=test_storage_resolver,
     logger=logger,
     ml_nexus_docker_build_context="zeus",  # Set zeus as build context
 )
 
 # Module design
-__meta_design__ = design(overrides=load_env_design + test_design)
+# __meta_design__ = design(overrides=load_env_design + test_design)  # Removed deprecated __meta_design__
 
 
 # ===== Test Docker context injection =====

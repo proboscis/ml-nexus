@@ -23,10 +23,9 @@ test_storage_resolver = StaticStorageResolver(
 )
 
 # Test design configuration
-test_design = design(storage_resolver=test_storage_resolver, logger=logger)
+test_design = load_env_design + design(storage_resolver=test_storage_resolver, logger=logger)
 
-# Module design configuration
-__meta_design__ = design(overrides=load_env_design + test_design)
+# Module design configuration - removed deprecated __meta_design__
 
 
 # Test UV project

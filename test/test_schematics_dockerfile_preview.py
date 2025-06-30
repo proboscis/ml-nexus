@@ -5,18 +5,17 @@ each type of project (source, resource, uv, rye, etc).
 """
 
 from pathlib import Path
-from pinjected import design, IProxy, injected
+from pinjected import design
 from pinjected.test import injected_pytest
 from ml_nexus import load_env_design
 from ml_nexus.project_structure import ProjectDef, ProjectDir
-from ml_nexus.schematics_util.universal import schematics_universal
 from ml_nexus.storage_resolver import StaticStorageResolver
 from loguru import logger
 
 # Setup test environment
 TEST_PROJECT_ROOT = Path(__file__).parent / "dummy_projects"
 
-test_storage_resolver = StaticStorageResolver(
+_storage_resolver = StaticStorageResolver(
     {
         "test_source": TEST_PROJECT_ROOT / "test_source",
         "test_resource": TEST_PROJECT_ROOT / "test_resource",
@@ -28,14 +27,14 @@ test_storage_resolver = StaticStorageResolver(
 )
 
 # Test design configuration
-test_design = design(storage_resolver=test_storage_resolver, logger=logger)
-
-# Module design configuration
-__meta_design__ = design(overrides=load_env_design + test_design)
+_design = load_env_design + design(
+    storage_resolver=_storage_resolver, 
+    logger=logger
+)
 
 
 # ===== Test 1: Source kind Dockerfile =====
-@injected_pytest(test_design)
+@injected_pytest(_design)
 async def test_source_dockerfile_generation(schematics_universal, logger):
     """Test Dockerfile generation for source kind"""
     logger.info("Testing source kind Dockerfile generation")
@@ -55,7 +54,7 @@ async def test_source_dockerfile_generation(schematics_universal, logger):
 
 
 # ===== Test 2: UV kind Dockerfile =====
-@injected_pytest(test_design)
+@injected_pytest(_design)
 async def test_uv_dockerfile_generation(schematics_universal, logger):
     """Test Dockerfile generation for UV kind"""
     logger.info("Testing UV kind Dockerfile generation")
@@ -76,7 +75,7 @@ async def test_uv_dockerfile_generation(schematics_universal, logger):
 
 
 # ===== Test 3: Rye kind Dockerfile =====
-@injected_pytest(test_design)
+@injected_pytest(_design)
 async def test_rye_dockerfile_generation(schematics_universal, logger):
     """Test Dockerfile generation for Rye kind"""
     logger.info("Testing Rye kind Dockerfile generation")
@@ -96,7 +95,7 @@ async def test_rye_dockerfile_generation(schematics_universal, logger):
 
 
 # ===== Test 4: Setup.py kind Dockerfile =====
-@injected_pytest(test_design)
+@injected_pytest(_design)
 async def test_setuppy_dockerfile_generation(schematics_universal, logger):
     """Test Dockerfile generation for setup.py kind"""
     logger.info("Testing setup.py kind Dockerfile generation")
@@ -118,7 +117,7 @@ async def test_setuppy_dockerfile_generation(schematics_universal, logger):
 
 
 # ===== Test 5: Mixed project Dockerfile =====
-@injected_pytest(test_design)
+@injected_pytest(_design)
 async def test_mixed_dockerfile_generation(schematics_universal, logger):
     """Test Dockerfile generation for mixed project kinds"""
     logger.info("Testing mixed kinds Dockerfile generation")
@@ -147,27 +146,41 @@ async def test_mixed_dockerfile_generation(schematics_universal, logger):
     logger.info("✅ Mixed Dockerfile verified")
 
 
-# Keep IProxy definitions for backward compatibility
-# Function to print dockerfile
-@injected
-async def a_print_dockerfile(name: str, dockerfile: str):
+# ===== Test 6: Print source dockerfile =====
+@injected_pytest(_design)
+async def test_print_source_dockerfile(schematics_universal, logger):
+    """Print and verify source kind Dockerfile"""
+    schematic = await schematics_universal(
+        target=ProjectDef(dirs=[ProjectDir("test_source", kind="source")]),
+        base_image="ubuntu:22.04",
+    )
+    
+    dockerfile = schematic.builder.dockerfile
+    
     logger.info(f"\n{'=' * 60}")
-    logger.info(f"Dockerfile for {name}")
+    logger.info(f"Dockerfile for SOURCE kind")
     logger.info(f"{'=' * 60}")
     logger.info(f"\n{dockerfile}\n")
-    return dockerfile
+    
+    assert dockerfile is not None
+    assert len(dockerfile) > 0
 
 
-# IProxy definitions for running analysis
-test_source_dockerfile: IProxy = schematics_universal(
-    target=ProjectDef(dirs=[ProjectDir("test_source", kind="source")]),
-    base_image="ubuntu:22.04",
-).builder.dockerfile
-
-test_uv_dockerfile: IProxy = schematics_universal(
-    target=ProjectDef(dirs=[ProjectDir("test_uv", kind="uv")]),
-    base_image="python:3.11-slim",
-).builder.dockerfile
-
-test_print_source: IProxy = a_print_dockerfile("SOURCE kind", test_source_dockerfile)
-test_print_uv: IProxy = a_print_dockerfile("UV kind", test_uv_dockerfile)
+# ===== Test 7: Print UV dockerfile =====
+@injected_pytest(_design)
+async def test_print_uv_dockerfile(schematics_universal, logger):
+    """Print and verify UV kind Dockerfile"""
+    schematic = await schematics_universal(
+        target=ProjectDef(dirs=[ProjectDir("test_uv", kind="uv")]),
+        base_image="python:3.11-slim",
+    )
+    
+    dockerfile = schematic.builder.dockerfile
+    
+    logger.info(f"\n{'=' * 60}")
+    logger.info(f"Dockerfile for UV kind")
+    logger.info(f"{'=' * 60}")
+    logger.info(f"\n{dockerfile}\n")
+    
+    assert dockerfile is not None
+    assert len(dockerfile) > 0

@@ -1,49 +1,56 @@
 """Test UV embedded Docker image with Python execution"""
 
 from pathlib import Path
-from pinjected import design, instance, injected, IProxy
+from pinjected import design
+from pinjected.test import injected_pytest
 
 from ml_nexus import load_env_design
-from ml_nexus.docker.builder.docker_env_with_schematics import DockerEnvFromSchematics
 from ml_nexus.project_structure import ProjectDef, ProjectDir
-from ml_nexus.schematics_util.universal import schematics_universal
 from ml_nexus.storage_resolver import StaticStorageResolver
 
+# Configure static resolver for test directories
+_storage_resolver = StaticStorageResolver(
+    {
+        "test/dummy_projects/test_uv": Path(__file__).parent
+        / "dummy_projects"
+        / "test_uv",
+    }
+)
 
-@instance
-def ml_nexus_docker_build_context():
-    return "zeus"
+# Test design configuration
+_design = load_env_design + design(
+    ml_nexus_docker_build_context="zeus",
+    storage_resolver=_storage_resolver,
+)
 
 
-@instance
-def storage_resolver():
-    # Configure static resolver for test directories
-    return StaticStorageResolver(
-        {
-            "test/dummy_projects/test_uv": Path(__file__).parent
-            / "dummy_projects"
-            / "test_uv",
-        }
+@injected_pytest(_design)
+async def test_uv_embedded_python_execution(
+    schematics_universal,
+    new_DockerEnvFromSchematics,
+    logger,
+):
+    """Test UV embedded Docker image with Python execution"""
+    logger.info("Testing UV embedded Docker image")
+    
+    # Create UV auto-embed project - use the storage resolver key
+    project = ProjectDef(
+        dirs=[ProjectDir(id="test/dummy_projects/test_uv", kind="auto-embed")]
     )
-
-
-# Test for UV auto-embed project
-test_uv_embed_project: IProxy = ProjectDef(
-    dirs=[ProjectDir(id="test/dummy_projects/test_uv", kind="auto-embed")]
-)
-
-test_schematics_uv_embed: IProxy = schematics_universal(target=test_uv_embed_project)
-
-# Use non-persistent DockerEnvFromSchematics for quicker testing
-test_docker_env: IProxy = injected(DockerEnvFromSchematics)(
-    project=test_uv_embed_project,
-    schematics=test_schematics_uv_embed,
-    docker_host="zeus",
-)
-
-# Test Python execution in UV container
-test_uv_python: IProxy = test_docker_env.run_script(
-    """
+    
+    # Generate schematics
+    schematics = await schematics_universal(target=project)
+    
+    # Create Docker environment
+    docker_env = new_DockerEnvFromSchematics(
+        project=project,
+        schematics=schematics,
+        docker_host="zeus",
+    )
+    
+    # Test Python execution in UV container
+    result = await docker_env.run_script(
+        """
 echo "=== Testing Python in UV embedded container ==="
 echo "1. Python version:"
 python --version
@@ -67,9 +74,13 @@ python main.py
 
 echo -e "\n=== UV Python test complete ==="
 """
-)
-
-__design__ = load_env_design + design(
-    ml_nexus_docker_build_context=ml_nexus_docker_build_context,
-    storage_resolver=storage_resolver,
-)
+    )
+    
+    logger.info(f"Test result:\n{result.stdout}")
+    
+    # Verify the test ran successfully
+    assert result is not None
+    assert "UV embedded container working!" in result.stdout
+    assert "python" in result.stdout.lower()
+    
+    logger.info("✅ UV embedded Python execution test passed")

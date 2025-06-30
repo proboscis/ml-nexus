@@ -129,6 +129,9 @@ async def a_get_mount_request_for_pdir(
     elif pdir.kind == "pyvenv-embed":
         # Treat pyvenv-embed as source mount (no patching needed)
         kind = "source"
+    elif pdir.kind == "uv-pip-embed":
+        # Treat uv-pip-embed as source mount (no patching needed)
+        kind = "source"
     else:
         kind = pdir.kind
 
