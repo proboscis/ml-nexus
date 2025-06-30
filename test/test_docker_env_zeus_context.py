@@ -5,20 +5,18 @@ for building images and runs various scenarios with multiple schematics configur
 """
 
 from pathlib import Path
-from pinjected import IProxy, design, injected
+from pinjected import design
 from pinjected.test import injected_pytest
 from ml_nexus import load_env_design
 from ml_nexus.docker.builder.docker_env_with_schematics import DockerHostPlacement
 from ml_nexus.project_structure import ProjectDef, ProjectDir
 from ml_nexus.storage_resolver import StaticStorageResolver
 
-# No longer need the conversion utility with @injected_pytest
-
 # Setup test project paths
 TEST_PROJECT_ROOT = Path(__file__).parent / "dummy_projects"
 
 # Test storage resolver
-test_storage_resolver = StaticStorageResolver(
+_storage_resolver = StaticStorageResolver(
     {
         "test_uv": TEST_PROJECT_ROOT / "test_uv",
         "test_rye": TEST_PROJECT_ROOT / "test_rye",
@@ -30,9 +28,8 @@ test_storage_resolver = StaticStorageResolver(
 )
 
 # Module design configuration with zeus context
-# Module design configuration with zeus context
-test_design = design(
-    storage_resolver=test_storage_resolver,
+_design = load_env_design + design(
+    storage_resolver=_storage_resolver,
     ml_nexus_default_docker_host_placement=DockerHostPlacement(
         cache_root=Path("/tmp/ml-nexus-zeus-test/cache"),
         resource_root=Path("/tmp/ml-nexus-zeus-test/resources"),
@@ -43,11 +40,9 @@ test_design = design(
     ml_nexus_docker_build_context="zeus",
 )
 
-__meta_design__ = design(overrides=load_env_design + test_design)
-
 
 # ===== Test 1: Basic Zeus context verification =====
-@injected_pytest(test_design)
+@injected_pytest(_design)
 async def test_zeus_context_basic(
     schematics_universal,
     new_DockerEnvFromSchematics,
@@ -84,11 +79,8 @@ async def test_zeus_context_basic(
     logger.info("✅ Zeus context basic test passed")
 
 
-# No longer need manual IProxy creation with @injected_pytest
-
-
 # ===== Test 2: Multiple schematics with different base images =====
-@injected_pytest(test_design)
+@injected_pytest(_design)
 async def test_multiple_schematics_base_images(
     schematics_universal, new_DockerEnvFromSchematics, logger
 ):
@@ -125,20 +117,13 @@ async def test_multiple_schematics_base_images(
         logger.info(f"✅ {base_image} test passed")
 
 
-# No longer need manual IProxy creation with @injected_pytest
-
-
-# ===== IProxy entry points for direct execution =====
-# These allow running tests directly with pinjected
-
-
-@injected
-async def a_demo_zeus_basic(
+# ===== Test 3: Demo basic Zeus context usage =====
+@injected_pytest(_design)
+async def test_demo_zeus_basic(
     schematics_universal,
     new_DockerEnvFromSchematics,
     ml_nexus_docker_build_context,
     logger,
-    /,
 ):
     """Demo basic Zeus context usage"""
     logger.info(f"Running demo with context: {ml_nexus_docker_build_context}")
@@ -155,8 +140,6 @@ async def a_demo_zeus_basic(
     # run_script() has undefined return type, so we just check it runs without error
     await docker_env.run_script("echo 'Zeus demo successful' && python --version")
     logger.info("Demo completed successfully")
-    return "Zeus demo completed"
-
-
-# Entry point with proper IProxy type annotation
-demo_zeus_basic: IProxy = a_demo_zeus_basic()
+    
+    # Add assertion to make it a proper test
+    assert ml_nexus_docker_build_context == "zeus"

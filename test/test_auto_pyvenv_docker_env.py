@@ -17,7 +17,7 @@ from loguru import logger
 TEST_PROJECT_ROOT = Path(__file__).parent / "dummy_projects"
 
 # Test storage resolver
-test_storage_resolver = StaticStorageResolver(
+_storage_resolver = StaticStorageResolver(
     {
         "test_setuppy": TEST_PROJECT_ROOT / "test_setuppy",
         "test_requirements": TEST_PROJECT_ROOT / "test_requirements",
@@ -26,8 +26,8 @@ test_storage_resolver = StaticStorageResolver(
 )
 
 # Test design configuration
-test_design = design(
-    storage_resolver=test_storage_resolver,
+_test_design = design(
+    storage_resolver=_storage_resolver,
     logger=logger,
     ml_nexus_default_docker_host_placement=DockerHostPlacement(
         cache_root=Path("/tmp/ml-nexus-test/cache"),
@@ -40,11 +40,11 @@ test_design = design(
 )
 
 # Module design configuration
-__meta_design__ = design(overrides=load_env_design + test_design)
+__design__ = load_env_design + _test_design
 
 
 # ===== Test 1: Auto detection with requirements.txt uses pyvenv =====
-@injected_pytest(test_design)
+@injected_pytest
 async def test_auto_requirements_uses_pyvenv(
     schematics_universal, new_DockerEnvFromSchematics, logger
 ):
@@ -94,7 +94,7 @@ async def test_auto_requirements_uses_pyvenv(
 
 
 # ===== Test 2: Auto detection with setup.py uses pyvenv =====
-@injected_pytest(test_design)
+@injected_pytest
 async def test_auto_setuppy_uses_pyvenv(
     schematics_universal, new_DockerEnvFromSchematics, logger
 ):
@@ -142,7 +142,7 @@ async def test_auto_setuppy_uses_pyvenv(
 
 
 # ===== Test 3: Verify pyvenv vs direct UV/Rye =====
-@injected_pytest(test_design)
+@injected_pytest
 async def test_pyvenv_differences(schematics_universal, logger):
     """Verify that pyvenv setup is different from UV/Rye"""
     logger.info("Comparing pyvenv setup vs UV/Rye")

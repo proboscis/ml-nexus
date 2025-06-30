@@ -52,4 +52,4 @@ test_auto_embed_uv_mounts: IProxy = test_auto_embed_uv_schematic.mount_requests
 test_pyvenv_embed_mounts: IProxy = test_pyvenv_embed_schematic.mount_requests
 
 # Design for testing
-__meta_design__ = design(overrides=test_design)
+# __meta_design__ = design(overrides=test_design)  # Removed deprecated __meta_design__

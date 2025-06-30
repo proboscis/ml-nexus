@@ -79,7 +79,7 @@ def test_docker_context_env_var():
     # Import and check the design loads it
     from ml_nexus import load_env_design
 
-    design_instance = load_env_design()
+    design_instance = load_env_design
 
     # The context should be loaded from env
     graph = design_instance.to_graph()

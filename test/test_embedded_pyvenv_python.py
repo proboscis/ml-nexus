@@ -1,57 +1,72 @@
 """Test to verify Python execution works in embedded pyvenv containers"""
 
 from pathlib import Path
-from pinjected import design, instance, injected, IProxy
-
+from pinjected import design
+from pinjected.test import injected_pytest
 from ml_nexus import load_env_design
-from ml_nexus.docker.builder.persistent import PersistentDockerEnvFromSchematics
 from ml_nexus.project_structure import ProjectDef, ProjectDir
-from ml_nexus.schematics_util.universal import schematics_universal
 from ml_nexus.storage_resolver import StaticStorageResolver
+from loguru import logger
+
+# Configure static resolver for test directories
+_storage_resolver = StaticStorageResolver(
+    {
+        "test/dummy_projects/test_requirements": Path(__file__).parent
+        / "dummy_projects"
+        / "test_requirements",
+        "test/dummy_projects/test_uv": Path(__file__).parent
+        / "dummy_projects"
+        / "test_uv",
+        "test/dummy_projects/test_setuppy": Path(__file__).parent
+        / "dummy_projects"
+        / "test_setuppy",
+    }
+)
+
+# Test design configuration
+_design = load_env_design + design(
+    ml_nexus_docker_build_context="zeus",
+    storage_resolver=_storage_resolver,
+    logger=logger
+)
 
 
-@instance
-def ml_nexus_docker_build_context():
-    return "zeus"
-
-
-@instance
-def storage_resolver():
-    # Configure static resolver for test directories
-    return StaticStorageResolver(
-        {
-            "test/dummy_projects/test_requirements": Path(__file__).parent
-            / "dummy_projects"
-            / "test_requirements",
-            "test/dummy_projects/test_uv": Path(__file__).parent
-            / "dummy_projects"
-            / "test_uv",
-            "test/dummy_projects/test_setuppy": Path(__file__).parent
-            / "dummy_projects"
-            / "test_setuppy",
-        }
+# Test: Python execution in pyvenv-embed container
+@injected_pytest(_design)
+async def test_pyvenv_embed_python_execution(
+    schematics_universal,
+    a_PersistentDockerEnvFromSchematics,
+    logger
+):
+    """Test Python execution in pyvenv-embed container"""
+    logger.info("Testing Python execution in pyvenv-embed container")
+    
+    # Create project
+    project = ProjectDef(
+        dirs=[ProjectDir(id="test/dummy_projects/test_requirements", kind="pyvenv-embed")]
     )
-
-
-# Test for pyvenv-embed project
-test_pyvenv_embed_project: IProxy = ProjectDef(
-    dirs=[ProjectDir(id="test/dummy_projects/test_requirements", kind="pyvenv-embed")]
-)
-
-test_schematics_pyvenv_embed: IProxy = schematics_universal(
-    target=test_pyvenv_embed_project, python_version="3.11"
-)
-
-test_pyvenv_embed_docker: IProxy = injected(PersistentDockerEnvFromSchematics)(
-    project=test_pyvenv_embed_project,
-    schematics=test_schematics_pyvenv_embed,
-    docker_host="zeus",
-    container_name="test_pyvenv_embed_python_exec",
-)
-
-# Test Python execution
-test_pyvenv_embed_python_exec: IProxy = test_pyvenv_embed_docker.run_script(
-    """
+    
+    # Generate schematics
+    schematics = await schematics_universal(
+        target=project, 
+        python_version="3.11"
+    )
+    
+    # Create Docker environment
+    docker_env = await a_PersistentDockerEnvFromSchematics(
+        project=project,
+        schematics=schematics,
+        docker_host="zeus",
+        container_name="test_pyvenv_embed_python_exec",
+    )
+    
+    # Start container
+    await docker_env.start()
+    
+    try:
+        # Run comprehensive Python test script
+        result = await docker_env.run_script(
+            """
 echo "=== Testing Python execution in pyvenv-embed container ==="
 echo "1. Checking Python version:"
 python --version
@@ -93,9 +108,22 @@ python test_script.py arg1 arg2
 
 echo -e "\n=== All Python tests completed ==="
 """
-)
-
-__design__ = load_env_design + design(
-    ml_nexus_docker_build_context=ml_nexus_docker_build_context,
-    storage_resolver=storage_resolver,
-)
+        )
+        
+        logger.info(f"Test result:\n{result}")
+        
+        # Verify the test ran successfully
+        assert result is not None
+        assert "Python executable:" in result
+        assert "Python version:" in result
+        assert "JSON module works:" in result
+        assert "Sum of range(10): 45" in result
+        assert "Script execution successful!" in result
+        assert "Arguments: ['test_script.py', 'arg1', 'arg2']" in result
+        
+    finally:
+        # Clean up
+        try:
+            await docker_env.stop()
+        except Exception as e:
+            logger.warning(f"Failed to stop container: {e}")

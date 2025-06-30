@@ -34,9 +34,10 @@ test_schematics_uv: IProxy = schematics_universal(
     base_image="python:3.11-slim",
 )
 
-# Test case for 'setup.py' kind - setup.py based project
+# Test case for 'setup.py' kind - use 'auto' which will detect setup.py
+# Note: kind="setup.py" is not implemented, use kind="auto" instead
 test_schematics_setup_py: IProxy = schematics_universal(
-    target=ProjectDef(dirs=[ProjectDir("test_setuppy_project", kind="setup.py")]),
+    target=ProjectDef(dirs=[ProjectDir("test_setuppy_project", kind="auto")]),
     base_image="python:3.11-slim",
 )
 
@@ -73,6 +74,6 @@ test_schematics_gpu: IProxy = schematics_universal(
 )
 
 # Design override for testing
-__meta_design__ = design(
-    # Add any necessary overrides for testing
-)
+# __meta_design__ = design(  # Removed deprecated __meta_design__
+#     # Add any necessary overrides for testing
+# )

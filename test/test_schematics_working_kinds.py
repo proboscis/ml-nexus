@@ -23,10 +23,10 @@ test_storage_resolver = StaticStorageResolver(
 )
 
 # Test design configuration
-test_design = design(storage_resolver=test_storage_resolver, logger=logger)
+test_design = load_env_design + design(storage_resolver=test_storage_resolver, logger=logger)
 
 # Module design configuration
-__meta_design__ = design(overrides=load_env_design + test_design)
+# __meta_design__ = design(overrides=load_env_design + test_design)  # Removed deprecated __meta_design__
 
 
 # Test working kinds
@@ -125,3 +125,75 @@ async def test_working_schematics(schematics_universal, logger):
         assert result["status"] == "✓ PASSED", (
             f"{result['kind']} failed: {result.get('error', 'Unknown error')}"
         )
+
+
+# Test multiple Python versions
+@injected_pytest(test_design)
+async def test_python_versions_schematics(schematics_universal, logger):
+    """Test schematic generation for Python 3.10-3.13"""
+    logger.info("Testing schematic generation for Python 3.10-3.13")
+    
+    # Test with UV project
+    project = ProjectDef(dirs=[ProjectDir("test_uv", kind="uv")])
+    
+    versions = ["3.10", "3.11", "3.12", "3.13"]
+    results = []
+    
+    for version in versions:
+        logger.info(f"\n{'=' * 60}")
+        logger.info(f"Testing Python {version}")
+        logger.info(f"{'=' * 60}")
+        
+        try:
+            # Generate schematic for this Python version
+            schematic = await schematics_universal(
+                target=project,
+                base_image=f"python:{version}-slim",
+                python_version=version
+            )
+            
+            builder = schematic.builder
+            logger.info(f"✓ Successfully created schematic for Python {version}")
+            logger.info(f"  Base image: {builder.base_image}")
+            
+            # Check that base image contains the version
+            assert version in builder.base_image or f"python{version}" in builder.base_image
+            
+            # Get entrypoint script to verify Python version setup
+            entrypoint_script = await builder.a_entrypoint_script()
+            
+            # Check for UV commands
+            scripts_str = " ".join(builder.scripts)
+            assert "uv" in scripts_str.lower() or "UV" in scripts_str
+            
+            results.append({
+                "version": version,
+                "status": "✓ PASSED",
+                "base_image": builder.base_image
+            })
+            
+        except Exception as e:
+            logger.error(f"✗ Failed for Python {version}: {e!s}")
+            results.append({
+                "version": version,
+                "status": "✗ FAILED",
+                "error": str(e)
+            })
+    
+    # Summary
+    logger.info(f"\n{'=' * 60}")
+    logger.info("PYTHON VERSION TEST SUMMARY")
+    logger.info(f"{'=' * 60}")
+    
+    for result in results:
+        if "error" in result:
+            logger.info(f"Python {result['version']:4} {result['status']}")
+        else:
+            logger.info(f"Python {result['version']:4} {result['status']} - {result['base_image']}")
+    
+    passed = sum(1 for r in results if "PASSED" in r["status"])
+    total = len(results)
+    logger.info(f"\nTotal: {passed}/{total} passed")
+    
+    # Assert all tests passed
+    assert passed == total, f"Only {passed}/{total} Python version tests passed"
