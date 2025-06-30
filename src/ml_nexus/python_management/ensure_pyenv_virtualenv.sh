@@ -187,7 +187,7 @@ install_python() {
     fi
 
     # Redirect stderr to avoid git warnings that are already handled
-    if ! pyenv versions 2>/dev/null | grep -q "$PYTHON_VERSION"; then
+    if ! pyenv versions 2>/dev/null | grep -q "^[* ]*$PYTHON_VERSION"; then
         log_message "Installing Python $PYTHON_VERSION..."
         # Install Python and check if it succeeded
         if ! pyenv install "$PYTHON_VERSION" 2>&1 | grep -v "detected dubious ownership"; then
@@ -203,7 +203,8 @@ install_python() {
     
     # Verify the correct Python version is now active
     local active_version=$(pyenv version-name 2>/dev/null || echo "unknown")
-    if [ "$active_version" != "$PYTHON_VERSION" ]; then
+    # Check if active version starts with requested version (handles 3.12 vs 3.12.11)
+    if [[ "$active_version" != "$PYTHON_VERSION"* ]]; then
         log_message "ERROR: Expected Python $PYTHON_VERSION but got $active_version"
         return 1
     fi
