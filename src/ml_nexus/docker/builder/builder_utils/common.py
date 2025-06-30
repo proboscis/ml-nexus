@@ -7,7 +7,7 @@ from pinjected import injected
 from pinjected.compatibility.task_group import TaskGroup
 
 from ml_nexus.docker.builder.macros.macro_defs import Macro
-from ml_nexus.project_structure import ProjectDef
+from ml_nexus.project_structure import ProjectDef, ProjectKind
 from returns.result import safe, ResultE, Failure, Success
 
 
@@ -26,7 +26,7 @@ def attr_toml(key):
 
 
 @injected
-async def a_infer_source_kind(path: Path):
+async def a_infer_source_kind(path: Path) -> ProjectKind:
     pyproject = maybe_read_file(path / "pyproject.toml")
     tool_rye = pyproject.map(attr_toml("tool.rye"))
     requirements_txt = maybe_read_file(path / "requirements.txt")

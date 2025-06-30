@@ -176,7 +176,12 @@ class DockerHostEnvironment(IScriptRunner):
         cmd = await self.build_docker_cmd(
             f"bash /usr/local/bin/base64_runner.sh {base64_encoded_script}"
         )
-        result = await self._a_system_parallel(f"ssh {self.docker_host} {cmd}")
+        
+        # When using Docker context, no SSH needed - context handles remote connection
+        if self._ml_nexus_docker_build_context:
+            result = await self._a_system_parallel(cmd)
+        else:
+            result = await self._a_system_parallel(f"ssh {self.docker_host} {cmd}")
 
         if result.exit_code != 0:
             from ml_nexus.util import CommandException
@@ -194,7 +199,12 @@ class DockerHostEnvironment(IScriptRunner):
         cmd = await self.build_docker_cmd(
             f"bash /usr/local/bin/base64_runner.sh {base64_encoded_script}"
         )
-        result = await self._a_system_parallel(f"ssh {self.docker_host} {cmd}")
+        
+        # When using Docker context, no SSH needed - context handles remote connection
+        if self._ml_nexus_docker_build_context:
+            result = await self._a_system_parallel(cmd)
+        else:
+            result = await self._a_system_parallel(f"ssh {self.docker_host} {cmd}")
 
         if result.exit_code != 0:
             from ml_nexus.util import CommandException

@@ -90,9 +90,7 @@ class PersistentDockerEnvFromSchematics(IScriptRunner):
             # self._logger.info(f"Container {self.container_name} row: {row}")
             state = row["State"]
             # self._logger.info(f"Container {self.container_name} status: {status}")
-            if state == "running":
-                return True
-            return False
+            return state == "running"
 
     async def a_wait_container_ready(self):
         while not await self.a_is_container_ready():
@@ -204,3 +202,25 @@ class PersistentDockerEnvFromSchematics(IScriptRunner):
             local_download_path=self._env_result_download_path,
             env=self,
         )
+    
+    async def start(self):
+        """Start the persistent container"""
+        await self.ensure_container()
+
+
+@injected
+async def a_PersistentDockerEnvFromSchematics(
+    new_PersistentDockerEnvFromSchematics,
+    /,
+    project: ProjectDef,
+    schematics: ContainerSchematic,
+    docker_host: str,
+    container_name: str,
+) -> PersistentDockerEnvFromSchematics:
+    """Async wrapper to create PersistentDockerEnvFromSchematics instances"""
+    return new_PersistentDockerEnvFromSchematics(
+        project=project,
+        schematics=schematics,
+        docker_host=docker_host,
+        container_name=container_name,
+    )
