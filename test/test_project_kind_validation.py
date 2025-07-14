@@ -51,6 +51,12 @@ async def test_all_project_kinds_are_handled(a_prepare_setup_script_with_deps, l
             test_id = "test_rye"
         elif kind in ["setup.py", "pyvenv-embed", "uv-pip-embed"]:
             test_id = "test_setuppy"
+        elif kind == "requirement.txt":
+            test_id = "test_requirements"
+        elif kind == "pyvenv":
+            # pyvenv can work with either setup.py or requirements.txt
+            # Use test_setuppy as it has setup.py
+            test_id = "test_setuppy"
         elif kind == "resource":
             test_id = "test_resource"
         elif kind == "source":

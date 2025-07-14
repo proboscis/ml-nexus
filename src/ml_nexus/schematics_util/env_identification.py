@@ -339,6 +339,31 @@ async def a_prepare_setup_script_with_deps(
                 raise NotImplementedError(
                     f"uv-pip-embed requires either setup.py or requirements.txt"
                 )
+        case "requirement.txt":
+            # Explicit requirements.txt project
+            return SetupScriptWithDeps(
+                cxt=new_ProjectContext(repo=repo),
+                script="pip install -r requirements.txt",
+                env_deps=["pyvenv", "requirements.txt"],
+            )
+        case "pyvenv":
+            # Explicit pyvenv project - detect if it's setup.py or requirements.txt
+            if (repo / "setup.py").exists():
+                return SetupScriptWithDeps(
+                    cxt=new_ProjectContext(repo=repo),
+                    script="pip install -e .",
+                    env_deps=["pyvenv", "setup.py"],
+                )
+            elif (repo / "requirements.txt").exists():
+                return SetupScriptWithDeps(
+                    cxt=new_ProjectContext(repo=repo),
+                    script="pip install -r requirements.txt",
+                    env_deps=["pyvenv", "requirements.txt"],
+                )
+            else:
+                raise NotImplementedError(
+                    f"pyvenv requires either setup.py or requirements.txt"
+                )
         case _:
             raise NotImplementedError(
                 f"kind:{target.dirs[0].kind} is not implemented for schema identification"

@@ -20,6 +20,8 @@ ProjectKind = Literal[
     "rye",
     "uv",
     "setup.py",
+    "pyvenv",
+    "requirement.txt",
     "pyvenv-embed",
     "uv-pip-embed",
 ]
