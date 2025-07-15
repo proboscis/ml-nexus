@@ -141,6 +141,7 @@ chmod 600 ~/.git-credentials"""
 @instance
 def __load_default_design():
     from ml_nexus.util import a_system_parallel
+    from ml_nexus.event_bus_util import handle_ml_nexus_system_call_events__simple
 
     from ml_nexus.docker.builder.docker_builder import DockerBuilder
 
@@ -225,6 +226,7 @@ def __load_default_design():
         ml_nexus_default_python_version="3.12",
         macro_install_pyenv_virtualenv_installer=macro_install_pyenv_virtualenv_installer,
         ml_nexus_github_credential_component=ml_nexus_github_credential_component__pat,
+        ml_nexus_system_call_event_bus=handle_ml_nexus_system_call_events__simple,
     )
 
     return default_design
