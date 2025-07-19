@@ -14,11 +14,13 @@ from ml_nexus.schematics import (
     ContainerScript,
 )
 from ml_nexus.testing import ml_nexus_test_design
+from ml_nexus.schematics_util.universal import EnvComponent
 
 
 @injected
-async def schematics_with_setup_py(
-    new_DockerBuilder,
+async def schematics_with_setup_py(  # noqa: PINJ006
+    a_build_schematics_from_component,
+    base_apt_packages_component,
     macro_install_base64_runner,
     a_macro_install_pyenv,
     gather_rsync_macros_project_def,
@@ -39,26 +41,43 @@ async def schematics_with_setup_py(
         f"the first dir of the project must be setup.py. got {target.dirs[0].kind},{target.dirs[0].id}"
     )
 
-    base_builder = new_DockerBuilder(
-        base_image=base_image,
-        base_stage_name="base",
-        macros=[
-            "ENV DEBIAN_FRONTEND=noninteractive",
-            "RUN apt-get update && apt-get install -y python3-pip python3-dev build-essential libssl-dev curl git clang rsync",
-            await a_macro_install_pyenv(python_version),
-            macro_install_base64_runner,
-            f"ENV HF_HOME={hf_cache_mount}",
-            await gather_rsync_macros_project_def(target),
-            f"WORKDIR {target.default_working_dir}",
-            f"RUN python -m pip install -e .",
-        ],
-        scripts=[
-            f"cd {target.default_working_dir}",  # WORKDIR has no effect(often overriden) on K8S, so we set it here.
+    # Create components for this setup
+    pyenv_component = EnvComponent(
+        installation_macro=[await a_macro_install_pyenv(python_version)],
+        init_script=[
+            f"cd {target.default_working_dir}",
             f"pyenv local {python_version}",
         ],
     )
-    # sources are copied into the container so no dynamic mounts.
-    # TODO mount resources
+
+    base64_component = EnvComponent(installation_macro=[macro_install_base64_runner])
+
+    hf_cache_component = EnvComponent(
+        installation_macro=[f"ENV HF_HOME={hf_cache_mount}"],
+        mounts=[CacheMountRequest("hf_cache", hf_cache_mount)],
+    )
+
+    project_sync_component = EnvComponent(
+        installation_macro=[
+            await gather_rsync_macros_project_def(target),
+            f"WORKDIR {target.default_working_dir}",
+            f"RUN python -m pip install -e .",
+        ]
+    )
+
+    # Build schematic using component system
+    schematic = await a_build_schematics_from_component(
+        base_image=base_image,
+        components=[
+            base_apt_packages_component,  # This includes git_safe_directory_component
+            pyenv_component,
+            base64_component,
+            hf_cache_component,
+            project_sync_component,
+        ],
+    )
+
+    # Add resource mounts
     resource_mounts = await asyncio.gather(
         *[
             a_get_mount_request_for_pdir(placement=target.placement, pdir=pdir)
@@ -66,12 +85,9 @@ async def schematics_with_setup_py(
             if pdir.kind == "resource"
         ]
     )
-    cache_mounts = [
-        CacheMountRequest("hf_cache", hf_cache_mount),
-    ]
-    return ContainerSchematic(
-        builder=base_builder, mount_requests=[*cache_mounts, *resource_mounts]
-    )
+    schematic.mount_requests.extend(resource_mounts)
+
+    return schematic
 
 
 @dataclass
@@ -82,7 +98,7 @@ class CommandWithMacro:
 
 
 @injected
-async def macro_install_pyenv_virtualenv_installer(
+async def macro_install_pyenv_virtualenv_installer(  # noqa: PINJ006
     logger,
     /,
     venv_name,
@@ -143,8 +159,9 @@ RUN apt-get update && apt-get install -y make build-essential libssl-dev zlib1g-
 
 
 @injected
-async def schematics_with_pyvenv(
-    new_DockerBuilder,
+async def schematics_with_pyvenv(  # noqa: PINJ006
+    a_build_schematics_from_component,
+    base_apt_packages_component,
     macro_install_base64_runner,
     gather_rsync_macros_project_def,
     a_get_mount_request_for_pdir,
@@ -156,52 +173,67 @@ async def schematics_with_pyvenv(
 ) -> ContainerSchematic:
     """
     This creates pyenv-virtualenv environment, during runtime.
-    Thi is to be used with persistent environments to test dependencies interactively.
+    This is to be used with persistent environments to test dependencies interactively.
     You can use this as a base to call setup.py.
     """
     hf_cache_mount = Path("/cache/huggingface")
     target_id = target.dirs[0].id
-    # assert target.dirs[0].kind == 'setup.py', f"the first dir of the project must be setup.py. got {target.dirs[0].kind},{target.dirs[0].id}"
     venv_setup: CommandWithMacro = await macro_install_pyenv_virtualenv_installer(
         venv_name=target_id,
         venv_id=sha256(target_id.encode()).hexdigest()[:6],
         python_version=python_version,
     )
-    base_builder = new_DockerBuilder(
-        base_image=base_image,
-        base_stage_name="base",
-        macros=[
-            "ENV DEBIAN_FRONTEND=noninteractive",
-            "RUN apt-get update && apt-get install -y python3-pip python3-dev build-essential libssl-dev curl git clang rsync",
-            macro_install_base64_runner,
-            venv_setup.macro,
-            f"ENV HF_HOME={hf_cache_mount}",
+
+    # Create components
+    base64_component = EnvComponent(installation_macro=[macro_install_base64_runner])
+
+    venv_component = EnvComponent(
+        installation_macro=[venv_setup.macro],
+        init_script=[
+            venv_setup.command,
+            f"cd {target.default_working_dir}",
+        ],
+        mounts=venv_setup.volumes,
+    )
+
+    hf_cache_component = EnvComponent(
+        installation_macro=[f"ENV HF_HOME={hf_cache_mount}"],
+        mounts=[CacheMountRequest("hf_cache", hf_cache_mount)],
+    )
+
+    project_sync_component = EnvComponent(
+        installation_macro=[
             await gather_rsync_macros_project_def(target),
             f"WORKDIR {target.default_working_dir}",
-        ],
-        # await a_macro_install_pyenv(python_version),
-        scripts=[
-            venv_setup.command,
-            f"cd {target.default_working_dir}",  # WORKDIR has no effect(often overriden) on K8S, so we set it here.
+        ]
+    )
+
+    # Build schematic using component system
+    schematic = await a_build_schematics_from_component(
+        base_image=base_image,
+        components=[
+            base_apt_packages_component,  # This includes git_safe_directory_component
+            base64_component,
+            venv_component,
+            hf_cache_component,
+            project_sync_component,
         ],
     )
+
+    # Add project mounts
     mounts = await asyncio.gather(
         *[
             a_get_mount_request_for_pdir(placement=target.placement, pdir=pdir)
             for pdir in target.yield_project_dirs()
         ]
     )
-    cache_mounts = [
-        CacheMountRequest("hf_cache", hf_cache_mount),
-    ]
-    return ContainerSchematic(
-        builder=base_builder,
-        mount_requests=[*cache_mounts, *mounts, *venv_setup.volumes],
-    )
+    schematic.mount_requests.extend(mounts)
+
+    return schematic
 
 
 @injected
-async def schematics_with_setup_py__install_on_container(
+async def schematics_with_setup_py__install_on_container(  # noqa: PINJ006
     schematics_with_pyvenv,
     /,
     target: ProjectDef,

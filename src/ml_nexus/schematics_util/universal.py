@@ -34,25 +34,25 @@ class AHfCacheComponentProtocol(Protocol):
         self,
         cache_name: str = "hf_cache",
         container_path: Path = Path("/cache/huggingface"),
-    ) -> EnvComponent: ...
+    ) -> "EnvComponent": ...
 
 
 class APyenvComponentProtocol(Protocol):
     def __call__(
         self, target: ProjectDef, python_version: str = "3.12"
-    ) -> EnvComponent: ...
+    ) -> "EnvComponent": ...
 
 
 class APyenvComponentEmbeddedProtocol(Protocol):
     def __call__(
         self, target: ProjectDef, python_version: str = "3.12"
-    ) -> EnvComponent: ...
+    ) -> "EnvComponent": ...
 
 
 class AUvPipComponentEmbeddedProtocol(Protocol):
     def __call__(
         self, target: ProjectDef, python_version: str = "3.12"
-    ) -> EnvComponent: ...
+    ) -> "EnvComponent": ...
 
 
 class ABuildSchematicsFromComponentProtocol(Protocol):
@@ -62,33 +62,33 @@ class ABuildSchematicsFromComponentProtocol(Protocol):
 
 
 class AProjectSyncComponentProtocol(Protocol):
-    def __call__(self, tgt: ProjectDef) -> EnvComponent: ...
+    def __call__(self, tgt: ProjectDef) -> "EnvComponent": ...
 
 
 class ARyeComponentProtocol(Protocol):
     def __call__(
         self, project_workdir: Path, local_project_dir: Path
-    ) -> EnvComponent: ...
+    ) -> "EnvComponent": ...
 
 
 class AUvComponentProtocol(Protocol):
     def __call__(
         self, target: ProjectDef, do_sync: bool = True, isolate_env: bool = True
-    ) -> EnvComponent: ...
+    ) -> "EnvComponent": ...
 
 
 class AUvComponentEmbeddedProtocol(Protocol):
     def __call__(
         self, target: ProjectDef, do_sync: bool = True, isolate_env: bool = True
-    ) -> EnvComponent: ...
+    ) -> "EnvComponent": ...
 
 
 class AComponentToInstallRequirementsTxtProtocol(Protocol):
-    def __call__(self, target: ProjectDef) -> EnvComponent: ...
+    def __call__(self, target: ProjectDef) -> "EnvComponent": ...
 
 
 class AComponentToInstallRequirementsTxtEmbeddedProtocol(Protocol):
-    def __call__(self, target: ProjectDef) -> EnvComponent: ...
+    def __call__(self, target: ProjectDef) -> "EnvComponent": ...
 
 
 class SchematicsUniversalProtocol(Protocol):
@@ -121,7 +121,7 @@ class EnvComponent:
     dependencies: List["EnvComponent"] = field(default_factory=list)
 
 
-@injected(protocol=AHfCacheComponentProtocol)
+@injected
 async def a_hf_cache_component(  # pinjected: no dependencies
     cache_name: str = "hf_cache", container_path: Path = Path("/cache/huggingface")
 ) -> EnvComponent:
@@ -147,7 +147,7 @@ async def base_apt_packages_component(
     )
 
 
-@injected(protocol=APyenvComponentProtocol)
+@injected
 async def a_pyenv_component(
     macro_install_pyenv_virtualenv_installer: Callable,
     base_apt_packages_component: EnvComponent,
