@@ -152,17 +152,17 @@ Yeah someday I could do that...
 
 @injected
 @beartype
-async def a_identify_project_schema(
+async def a_identify_project_schema(  # noqa: C901, PLR0912
     new_ProjectContext, logger, /, repo: Path
 ) -> IdentifiedSchema:
     cxt: ProjectContext = new_ProjectContext(repo=repo)
     match (cxt.setup_py, cxt.requirements_txt, cxt.pyproject, cxt.readme):
-        case (Success(setup_py), Failure(), Failure(), _):
+        case (Success(_), Failure(), Failure(), _):
             return IdentifiedSchema(
                 schema=SetupPySchema(type="setup.py"),
                 justification="only setup.py exists",
             )
-        case (Failure(), Success(requirements_txt), Failure(), _):
+        case (Failure(), Success(_), Failure(), _):
             return IdentifiedSchema(
                 schema=RequirementsTxtSchema(type="requirements.txt"),
                 justification="only requirements.txt exists",
@@ -183,7 +183,7 @@ async def a_identify_project_schema(
                     schema=UVSchema(type="uv"),
                     justification="only pyproject.toml exists 'defaulting to uv'",
                 )
-        case (Failure(), Failure(), Failure(), Success(readme)):
+        case (Failure(), Failure(), Failure(), Success(_)):
             return IdentifiedSchema(
                 schema=ReadmeSchema(type="README.md"),
                 justification="only README.md exists",
@@ -213,7 +213,7 @@ Please generate a requirements.txt from the following README.md:
 
 
 @injected
-async def a_schema_to_setup_script_with_deps(
+async def a_schema_to_setup_script_with_deps(  # noqa: C901, PLR0912
     new_ProjectContext,
     /,
     schema: IdentifiedSchema,
@@ -228,7 +228,7 @@ async def a_schema_to_setup_script_with_deps(
             script = "poetry install"
             deps = ["poetry"]
         case UVSchema():
-            script = "uv sync"
+            script = "uv sync --upgrade"
             deps = ["uv"]
         case RequirementsTxtSchema():
             script = "pip install -r requirements.txt"
@@ -256,7 +256,7 @@ async def a_schema_to_setup_script_with_deps(
 
 
 @injected
-async def a_prepare_setup_script_with_deps(
+async def a_prepare_setup_script_with_deps(  # noqa: C901, PLR0911, PLR0912
     a_identify_project_schema,
     a_schema_to_setup_script_with_deps,
     storage_resolver,
@@ -275,7 +275,7 @@ async def a_prepare_setup_script_with_deps(
             if isinstance(base_schema.schema, UVSchema):
                 return SetupScriptWithDeps(
                     cxt=new_ProjectContext(repo=repo),
-                    script="uv sync",
+                    script="uv sync --upgrade",
                     env_deps=["uv-embedded"],
                 )
             elif isinstance(base_schema.schema, RequirementsTxtSchema):
