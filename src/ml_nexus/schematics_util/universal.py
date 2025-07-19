@@ -601,7 +601,7 @@ async def a_uv_component(
     else:
         scripts += ["export UV_PROJECT_ENVIRONMENT=/root/.cache/uv_venv/default"]
     if do_sync:
-        scripts += ["uv sync", "source $UV_PROJECT_ENVIRONMENT/bin/activate"]
+        scripts += ["uv sync --upgrade", "source $UV_PROJECT_ENVIRONMENT/bin/activate"]
     return EnvComponent(
         installation_macro=[await a_macro_install_uv()],
         dependencies=[
@@ -655,7 +655,7 @@ async def a_uv_component_embedded(
     dependency_install_macro = [
         *dependency_copy_macros,
         f"WORKDIR {target.default_working_dir}",
-        "RUN --mount=type=cache,target=/root/.cache/uv uv sync --no-install-project",
+        "RUN --mount=type=cache,target=/root/.cache/uv uv sync --upgrade --no-install-project",
     ]
 
     # Copy all project files (excluding common build artifacts)
@@ -685,7 +685,7 @@ async def a_uv_component_embedded(
             ],
         ),
         # Final sync with full project
-        "RUN --mount=type=cache,target=/root/.cache/uv uv sync",
+        "RUN --mount=type=cache,target=/root/.cache/uv uv sync --upgrade",
     ]
 
     scripts = []
