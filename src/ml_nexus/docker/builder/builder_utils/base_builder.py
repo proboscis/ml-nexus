@@ -1,12 +1,10 @@
-from pathlib import Path
-
 from pinjected import *
 
 from ml_nexus import load_env_design
 from ml_nexus.docker.builder.docker_env_with_schematics import DockerEnvFromSchematics
 from ml_nexus.testing.test_resources import test_project
 from ml_nexus.project_structure import ProjectDef
-from ml_nexus.schematics import CacheMountRequest, ContainerSchematic
+from ml_nexus.schematics import ContainerSchematic
 
 
 @injected
@@ -21,43 +19,36 @@ async def a_macro_install_uv():
 
 
 @injected
-async def schematics_with_uv(
-    new_DockerBuilder,
-    a_macro_install_uv,
+async def schematics_with_uv(  # noqa: PINJ006
+    a_build_schematics_from_component,
+    a_uv_component,
+    a_hf_cache_component,
     a_gather_mount_request_for_project,
     /,
     target: ProjectDef,
     base_image="nvidia/cuda:12.3.1-devel-ubuntu20.04",
 ) -> ContainerSchematic:
-    hf_cache_mount = Path("/cache/huggingface")
-    proj_dir = target.default_working_dir
+    """
+    Build container schematics for uv projects using the component system.
+    This ensures git safe directory is configured via base_apt_packages_component.
+    """
     assert target.dirs[0].kind in ["uv"], (
         f"the first dir of the project must be uv. got {target.dirs[0].kind},{target.dirs[0].id}"
     )
-    builder = new_DockerBuilder(
-        base_image=base_image,
-        macros=[
-            "ENV DEBIAN_FRONTEND=noninteractive",
-            "RUN apt-get update && apt-get install -y python3-pip python3-dev build-essential libssl-dev curl git clang rsync",
-            await a_macro_install_uv(),
-            f"ENV HF_HOME={hf_cache_mount}",
-            f"WORKDIR {target.default_working_dir}",
-        ],
-        scripts=[
-            f"cd {proj_dir}",  # WORKDIR has no effect on K8S, so we set it here.
-            "source $HOME/.cargo/env",
-            "uv sync",
-            f"source {proj_dir / '.venv/bin/activate'}",
-        ],
+
+    # Use component system which includes git safe directory via base_apt_packages_component
+    uv_comp = await a_uv_component(target=target)
+    hf_cache_comp = await a_hf_cache_component()
+
+    schematic = await a_build_schematics_from_component(
+        base_image=base_image, components=[uv_comp, hf_cache_comp]
     )
+
+    # Add dynamic mounts
     dynamic_mounts = await a_gather_mount_request_for_project(target)
-    cache_mounts = [
-        CacheMountRequest("uv_cache", Path("/root/.cache/uv")),
-        CacheMountRequest("hf_cache", hf_cache_mount),
-    ]
-    return ContainerSchematic(
-        builder=builder, mount_requests=[*dynamic_mounts, *cache_mounts]
-    )
+    schematic.mount_requests.extend(dynamic_mounts)
+
+    return schematic
 
 
 project = test_project

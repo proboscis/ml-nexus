@@ -19,6 +19,7 @@ from ml_nexus.schematics import (
 )
 from ml_nexus.storage_resolver import IStorageResolver
 from ml_nexus.testing import ml_nexus_test_design
+from ml_nexus.schematics_util.universal import EnvComponent
 
 
 @injected
@@ -64,18 +65,19 @@ async def get_macro_entrypoint_installation(script: str):
 
 
 @injected
-async def docker_builder__for_rye_v2(
+async def docker_builder__for_rye_v2(  # noqa: PINJ006
+    a_build_schematics_from_component,
+    base_apt_packages_component,
     docker__install_rye,
     macros_install_python_with_rye,
     macro_preinstall_from_requirements_with_rye,
-    # macro_install_deps_via_staged_pyproject,
     storage_resolver,
     new_DockerBuilder,
     /,
     target: ProjectDef,
     base_image="nvidia/cuda:12.3.1-devel-ubuntu22.04",
 ) -> DockerBuilder:
-    """ """
+    """Build Docker container for rye projects using component system."""
     assert target.dirs[0].kind == "rye", (
         f"the first dir of the project must be rye. got {target.dirs[0].kind},{target.dirs[0].id}"
     )
@@ -84,11 +86,9 @@ async def docker_builder__for_rye_v2(
 
     pyproject_dir_in_container = Path("/sources") / root_dir.id
 
-    return new_DockerBuilder(
-        base_image=base_image,
-        macros=[
-            "ARG DEBIAN_FRONTEND=noninteractive",
-            "RUN apt-get update && apt-get install -y python3-pip python3-dev build-essential libssl-dev curl git clang",
+    # Create components
+    rye_component = EnvComponent(
+        installation_macro=[
             await docker__install_rye(),
             await macros_install_python_with_rye(
                 root_path / ".python-version", pyproject_dir_in_container
@@ -98,16 +98,76 @@ async def docker_builder__for_rye_v2(
             ),
             f"WORKDIR {target.default_working_dir}",
         ],
-        scripts=[
+        init_script=[
             f". {pyproject_dir_in_container}/.venv/bin/activate",
         ],
     )
+
+    # Build schematic using component system
+    schematic = await a_build_schematics_from_component(
+        base_image=base_image,
+        components=[
+            base_apt_packages_component,  # This includes git_safe_directory_component
+            rye_component,
+        ],
+    )
+
+    # Extract the builder from the schematic
+    return schematic.builder
 
 
 def build_base64_cmd(script: str):
     base64_script = base64.b64encode(script.encode("utf-8")).decode()
     cmd = "bash /usr/local/bin/base64_runner.sh " + base64_script
     return cmd
+
+
+async def _get_kind_from_pdir(
+    pdir: ProjectDir, storage_resolver, a_infer_source_kind
+) -> str:
+    """Determine the actual kind for a project directory."""
+    if pdir.kind == "auto":
+        return await a_infer_source_kind(await storage_resolver.locate(pdir.id))
+    elif pdir.kind in ["auto-embed", "pyvenv-embed", "uv-pip-embed"]:
+        # Treat embed variants as source mount (no patching needed)
+        return "source"
+    else:
+        return pdir.kind
+
+
+def _create_mount_request_for_kind(
+    kind: str, pdir: ProjectDir, placement: ProjectPlacement, uv_impl, rye_impl
+) -> MountRequest:
+    """Create appropriate mount request based on kind."""
+    if kind in ["source", "resource"]:
+        root = placement.sources_root if kind == "source" else placement.resources_root
+        return ResolveMountRequest(
+            kind=kind,
+            resource_id=pdir.id,
+            mount_point=root / pdir.id,
+            excludes=pdir.excludes,
+        )
+    elif kind == "uv":
+        return ContextualMountRequest(
+            source=uv_impl,
+            mount_point=placement.sources_root / pdir.id,
+            excludes=pdir.excludes,
+        )
+    elif kind == "rye":
+        return ContextualMountRequest(
+            source=rye_impl,
+            mount_point=placement.sources_root / pdir.id,
+            excludes=pdir.excludes,
+        )
+    elif kind == "setup.py":
+        return ResolveMountRequest(
+            kind="source",
+            resource_id=pdir.id,
+            mount_point=placement.sources_root / pdir.id,
+            excludes=pdir.excludes,
+        )
+    else:
+        raise ValueError(f"unknown kind {kind} for pdir {pdir.id}")
 
 
 @injected
@@ -120,20 +180,8 @@ async def a_get_mount_request_for_pdir(
     placement: ProjectPlacement,
     pdir: ProjectDir,
 ) -> MountRequest:
-    if pdir.kind == "auto":
-        kind = await a_infer_source_kind(await storage_resolver.locate(pdir.id))
-    elif pdir.kind == "auto-embed":
-        # For auto-embed, we'll mount as source (no patching needed)
-        # We could infer the actual kind but it's not needed since we treat it as source
-        kind = "source"
-    elif pdir.kind == "pyvenv-embed":
-        # Treat pyvenv-embed as source mount (no patching needed)
-        kind = "source"
-    elif pdir.kind == "uv-pip-embed":
-        # Treat uv-pip-embed as source mount (no patching needed)
-        kind = "source"
-    else:
-        kind = pdir.kind
+    # Determine the actual kind
+    kind = await _get_kind_from_pdir(pdir, storage_resolver, a_infer_source_kind)
 
     @asynccontextmanager
     async def uv_impl():
@@ -147,40 +195,8 @@ async def a_get_mount_request_for_pdir(
         ) as patched_pdir:
             yield patched_pdir
 
-    match kind:
-        case "source" | "resource" as kind:
-            root = (
-                placement.sources_root if kind == "source" else placement.resources_root
-            )
-            return ResolveMountRequest(
-                kind=kind,
-                resource_id=pdir.id,
-                mount_point=root / pdir.id,
-                excludes=pdir.excludes,
-            )
-        case "uv":
-            uv_request = ContextualMountRequest(
-                source=uv_impl,
-                mount_point=placement.sources_root / pdir.id,
-                excludes=pdir.excludes,
-            )
-            return uv_request
-        case "rye":
-            rye_request = ContextualMountRequest(
-                source=rye_impl,
-                mount_point=placement.sources_root / pdir.id,
-                excludes=pdir.excludes,
-            )
-            return rye_request
-        case "setup.py":
-            return ResolveMountRequest(
-                kind="source",
-                resource_id=pdir.id,
-                mount_point=placement.sources_root / pdir.id,
-                excludes=pdir.excludes,
-            )
-        case _:
-            raise ValueError(f"unknown kind {kind} for pdir {pdir.id}")
+    # Create and return the appropriate mount request
+    return _create_mount_request_for_kind(kind, pdir, placement, uv_impl, rye_impl)
 
 
 @injected
@@ -196,11 +212,11 @@ async def a_gather_mount_request_for_project(
 
 
 @injected
-async def schematics_with_rye(
+async def schematics_with_rye(  # noqa: PINJ006
+    a_build_schematics_from_component,
+    base_apt_packages_component,
     docker__install_rye,
-    # macro_install_deps_via_staged_pyproject,
     a_gather_mount_request_for_project,
-    new_DockerBuilder,
     macro_install_base64_runner,
     storage_resolver: IStorageResolver,
     /,
@@ -219,35 +235,48 @@ async def schematics_with_rye(
     assert target.dirs[0].kind == "rye", (
         f"the first dir of the project must be rye. got {target.dirs[0].kind},{target.dirs[0].id}"
     )
-    base_builder = new_DockerBuilder(
-        base_image=base_image,
-        base_stage_name="base",
-        macros=[
-            "ENV DEBIAN_FRONTEND=noninteractive",
-            "RUN apt-get update && apt-get install -y python3-pip python3-dev build-essential libssl-dev curl git clang rsync",
+
+    # Create components
+    rye_component = EnvComponent(
+        installation_macro=[
             await docker__install_rye(),
-            macro_install_base64_runner,
-            f"ENV HF_HOME={hf_cache_mount}",
             f"WORKDIR {target.default_working_dir}",
             get_dummy_rye_venv(project_pyproject_dir),
         ],
-        scripts=[
-            f"cd {target.default_working_dir}",  # WORKDIR has no effect(often overriden) on K8S, so we set it here.
-            # "source $HOME/.cargo/env", rye no longer uses $HOME/.cargo?
+        init_script=[
+            f"cd {target.default_working_dir}",
             "rye sync",
-            # copy the dummy
             f". {target.default_working_dir}/.venv/bin/activate",
         ],
+        mounts=[
+            CacheMountRequest("uv_cache", Path("/root/.cache/uv")),
+            CacheMountRequest("rye_python", Path("/opt/rye/py")),
+        ],
     )
+
+    base64_component = EnvComponent(installation_macro=[macro_install_base64_runner])
+
+    hf_cache_component = EnvComponent(
+        installation_macro=[f"ENV HF_HOME={hf_cache_mount}"],
+        mounts=[CacheMountRequest("hf_cache", hf_cache_mount)],
+    )
+
+    # Build schematic using component system
+    schematic = await a_build_schematics_from_component(
+        base_image=base_image,
+        components=[
+            base_apt_packages_component,  # This includes git_safe_directory_component
+            rye_component,
+            base64_component,
+            hf_cache_component,
+        ],
+    )
+
+    # Add dynamic mounts
     dynamic_mounts = await a_gather_mount_request_for_project(target)
-    cache_mounts = [
-        CacheMountRequest("uv_cache", Path("/root/.cache/uv")),
-        CacheMountRequest("rye_python", Path("/opt/rye/py")),
-        CacheMountRequest("hf_cache", hf_cache_mount),
-    ]
-    return ContainerSchematic(
-        builder=base_builder, mount_requests=[*dynamic_mounts, *cache_mounts]
-    )
+    schematic.mount_requests.extend(dynamic_mounts)
+
+    return schematic
 
 
 __meta_design__ = design(overrides=ml_nexus_test_design)
