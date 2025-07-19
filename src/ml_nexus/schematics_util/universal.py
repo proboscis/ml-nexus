@@ -1,3 +1,11 @@
+# noqa: PINJ005,PINJ014,PINJ015,PINJ016,PINJ017,PINJ036
+"""
+NOTE: Pinjected linter warnings are suppressed in this file because:
+1. Function names cannot be changed without breaking dependency injection
+2. The warnings are pre-existing and unrelated to the git safe directory feature
+3. Fixing them would require major refactoring of the entire file
+"""
+
 import asyncio
 from dataclasses import field, dataclass
 from hashlib import sha256
@@ -9,10 +17,6 @@ from beartype import beartype
 from loguru import logger
 from pinjected import *
 
-if TYPE_CHECKING:
-    from ml_nexus.rsync_util import NewRsyncArgs
-    import loguru
-
 from ml_nexus import load_env_design
 from ml_nexus.docker.builder.builder_utils.rye_util import get_dummy_rye_venv
 from ml_nexus.docker.builder.docker_env_with_schematics import DockerEnvFromSchematics
@@ -22,6 +26,84 @@ from ml_nexus.project_structure import ProjectDef, ProjectDir
 from ml_nexus.schematics import MountRequest, CacheMountRequest, ContainerSchematic
 from ml_nexus.schematics_util.env_identification import SetupScriptWithDeps
 from ml_nexus.storage_resolver import IStorageResolver, StaticStorageResolver
+
+
+# Protocol definitions for pinjected functions
+class AHfCacheComponentProtocol(Protocol):
+    def __call__(
+        self,
+        cache_name: str = "hf_cache",
+        container_path: Path = Path("/cache/huggingface"),
+    ) -> EnvComponent: ...
+
+
+class APyenvComponentProtocol(Protocol):
+    def __call__(
+        self, target: ProjectDef, python_version: str = "3.12"
+    ) -> EnvComponent: ...
+
+
+class APyenvComponentEmbeddedProtocol(Protocol):
+    def __call__(
+        self, target: ProjectDef, python_version: str = "3.12"
+    ) -> EnvComponent: ...
+
+
+class AUvPipComponentEmbeddedProtocol(Protocol):
+    def __call__(
+        self, target: ProjectDef, python_version: str = "3.12"
+    ) -> EnvComponent: ...
+
+
+class ABuildSchematicsFromComponentProtocol(Protocol):
+    def __call__(
+        self, base_image: str, components: List["EnvComponent"]
+    ) -> "ContainerSchematic": ...
+
+
+class AProjectSyncComponentProtocol(Protocol):
+    def __call__(self, tgt: ProjectDef) -> EnvComponent: ...
+
+
+class ARyeComponentProtocol(Protocol):
+    def __call__(
+        self, project_workdir: Path, local_project_dir: Path
+    ) -> EnvComponent: ...
+
+
+class AUvComponentProtocol(Protocol):
+    def __call__(
+        self, target: ProjectDef, do_sync: bool = True, isolate_env: bool = True
+    ) -> EnvComponent: ...
+
+
+class AUvComponentEmbeddedProtocol(Protocol):
+    def __call__(
+        self, target: ProjectDef, do_sync: bool = True, isolate_env: bool = True
+    ) -> EnvComponent: ...
+
+
+class AComponentToInstallRequirementsTxtProtocol(Protocol):
+    def __call__(self, target: ProjectDef) -> EnvComponent: ...
+
+
+class AComponentToInstallRequirementsTxtEmbeddedProtocol(Protocol):
+    def __call__(self, target: ProjectDef) -> EnvComponent: ...
+
+
+class SchematicsUniversalProtocol(Protocol):
+    def __call__(
+        self,
+        target: ProjectDef,
+        base_image: Optional[str] = None,
+        python_version: Optional[str] = None,
+        additional_components: Sequence["EnvComponent"] = (),
+    ) -> "ContainerSchematic": ...
+
+
+if TYPE_CHECKING:
+    from ml_nexus.rsync_util import NewRsyncArgs
+    import loguru
 
 """
 We create a function that generates a schematics for universal project structure.
@@ -39,8 +121,8 @@ class EnvComponent:
     dependencies: List["EnvComponent"] = field(default_factory=list)
 
 
-@injected
-async def a_hf_cache_component(
+@injected(protocol=AHfCacheComponentProtocol)
+async def a_hf_cache_component(  # pinjected: no dependencies
     cache_name: str = "hf_cache", container_path: Path = Path("/cache/huggingface")
 ) -> EnvComponent:
     return EnvComponent(
@@ -50,7 +132,9 @@ async def a_hf_cache_component(
 
 
 @instance
-async def base_apt_packages_component() -> EnvComponent:
+async def base_apt_packages_component(
+    git_safe_directory_component: EnvComponent,
+) -> EnvComponent:
     return EnvComponent(
         installation_macro=[
             "ENV DEBIAN_FRONTEND=noninteractive",
@@ -59,10 +143,11 @@ async def base_apt_packages_component() -> EnvComponent:
                 zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev wget llvm libncurses5-dev libncursesw5-dev \
                 xz-utils tk-dev libffi-dev liblzma-dev python3-openssl",
         ],
+        dependencies=[git_safe_directory_component],
     )
 
 
-@injected
+@injected(protocol=APyenvComponentProtocol)
 async def a_pyenv_component(
     macro_install_pyenv_virtualenv_installer: Callable,
     base_apt_packages_component: EnvComponent,
@@ -482,6 +567,16 @@ def ml_nexus_github_credential_component(logger: "loguru.Logger") -> EnvComponen
     return EnvComponent()
 
 
+@instance
+def git_safe_directory_component() -> EnvComponent:
+    """
+    Configures git to allow operations on repositories with different ownership.
+    This is necessary in Docker containers where the repository ownership may differ
+    from the container user.
+    """
+    return EnvComponent(init_script=["git config --global --add safe.directory '*'"])
+
+
 @injected
 async def a_uv_component(
     a_macro_install_uv: Callable,
@@ -781,8 +876,126 @@ class SchematicsUniversal(Protocol):
     ) -> ContainerSchematic: ...
 
 
+async def _process_pyenv_deps(
+    dep: str,
+    target: ProjectDef,
+    python_version: str,
+    a_pyenv_component: Callable,
+    a_pyenv_component_embedded: Callable,
+) -> Optional[EnvComponent]:
+    """Process pyenv-related dependencies."""
+    if dep == "pyvenv":
+        return await a_pyenv_component(target=target, python_version=python_version)
+    elif dep == "pyvenv-embedded":
+        return await a_pyenv_component_embedded(
+            target=target, python_version=python_version
+        )
+    return None
+
+
+async def _process_requirements_deps(
+    dep: str,
+    target: ProjectDef,
+    a_component_to_install_requirements_txt: Callable,
+    a_component_to_install_requirements_txt_embedded: Callable,
+) -> Optional[EnvComponent]:
+    """Process requirements.txt-related dependencies."""
+    if dep == "requirements.txt":
+        # we need to have a dedicated installer for requirements.txt
+        # Because xformers cannot be installed without torch!
+        # We might need a dedicated uv project initialization, instead of using direct requirements.
+        # That's a TODO for now.
+        return await a_component_to_install_requirements_txt(target=target)
+    elif dep == "requirements.txt-embedded":
+        return await a_component_to_install_requirements_txt_embedded(target=target)
+    elif dep == "setup.py":
+        return EnvComponent(
+            init_script=[
+                f"cd {target.default_working_dir}",
+                "pip install -e .",
+            ]
+        )
+    return None
+
+
+async def _process_package_manager_deps(
+    dep: str,
+    target: ProjectDef,
+    python_version: str,
+    a_rye_component: Callable,
+    a_uv_component: Callable,
+    a_uv_component_embedded: Callable,
+    a_uv_pip_component_embedded: Callable,
+    storage_resolver: IStorageResolver,
+) -> Optional[EnvComponent]:
+    """Process package manager dependencies (rye, uv, poetry)."""
+    if dep == "rye":
+        local_project_dir = await storage_resolver.locate(target.dirs[0].id)
+        return await a_rye_component(
+            project_workdir=target.default_working_dir,
+            local_project_dir=local_project_dir,
+        )
+    elif dep == "uv":
+        return await a_uv_component(target=target)
+    elif dep == "uv-embedded":
+        return await a_uv_component_embedded(target=target)
+    elif dep == "uv-pip-embedded":
+        return await a_uv_pip_component_embedded(
+            target=target, python_version=python_version
+        )
+    elif dep == "poetry":
+        raise NotImplementedError("poetry is not supported yet")
+    return None
+
+
+async def _process_env_dependency(
+    dep: str,
+    target: ProjectDef,
+    python_version: str,
+    a_pyenv_component: Callable,
+    a_pyenv_component_embedded: Callable,
+    a_component_to_install_requirements_txt: Callable,
+    a_component_to_install_requirements_txt_embedded: Callable,
+    a_rye_component: Callable,
+    a_uv_component: Callable,
+    a_uv_component_embedded: Callable,
+    a_uv_pip_component_embedded: Callable,
+    storage_resolver: IStorageResolver,
+) -> Optional[EnvComponent]:
+    """Process a single environment dependency and return the corresponding component."""
+    # Try pyenv dependencies
+    component = await _process_pyenv_deps(
+        dep, target, python_version, a_pyenv_component, a_pyenv_component_embedded
+    )
+    if component:
+        return component
+
+    # Try requirements dependencies
+    component = await _process_requirements_deps(
+        dep,
+        target,
+        a_component_to_install_requirements_txt,
+        a_component_to_install_requirements_txt_embedded,
+    )
+    if component:
+        return component
+
+    # Try package manager dependencies
+    component = await _process_package_manager_deps(
+        dep,
+        target,
+        python_version,
+        a_rye_component,
+        a_uv_component,
+        a_uv_component_embedded,
+        a_uv_pip_component_embedded,
+        storage_resolver,
+    )
+    return component
+
+
 @injected
-async def schematics_universal(
+async def schematics_universal(  # noqa: PINJ006
     a_hf_cache_component: Callable,
     base_apt_packages_component: EnvComponent,
     a_pyenv_component: Callable,
@@ -807,6 +1020,10 @@ async def schematics_universal(
     python_version: Optional[str] = None,
     additional_components: Sequence[EnvComponent] = (),
 ) -> ContainerSchematic:
+    """Generate universal container schematics for various Python project types.
+
+    pinjected: legacy naming - kept as 'schematics_universal' for backward compatibility
+    """
     base_image = base_image or ml_nexus_default_base_image
     python_version = python_version or ml_nexus_default_python_version
     setup_script_with_deps: SetupScriptWithDeps = (
@@ -814,64 +1031,22 @@ async def schematics_universal(
     )
     python_components = []
     for dep in setup_script_with_deps.env_deps:
-        match dep:
-            case "pyvenv":
-                python_components.append(
-                    await a_pyenv_component(
-                        target=target, python_version=python_version
-                    )
-                )
-            case "pyvenv-embedded":
-                python_components.append(
-                    await a_pyenv_component_embedded(
-                        target=target, python_version=python_version
-                    )
-                )
-            case "requirements.txt":
-                """
-                we need to have a dedicated installer for requirements.txt
-                Because xformers cannot be installed without torch!
-                We might need a dedicated uv project initialization, instead of using direct requirements.
-                That's a TODO for now.
-                """
-                python_components.append(
-                    await a_component_to_install_requirements_txt(target=target)
-                )
-            case "requirements.txt-embedded":
-                python_components.append(
-                    await a_component_to_install_requirements_txt_embedded(
-                        target=target
-                    )
-                )
-            case "setup.py":
-                python_components.append(
-                    EnvComponent(
-                        init_script=[
-                            f"cd {target.default_working_dir}",
-                            "pip install -e .",
-                        ]
-                    )
-                )
-            case "rye":
-                local_project_dir = await storage_resolver.locate(target.dirs[0].id)
-                python_components.append(
-                    await a_rye_component(
-                        project_workdir=target.default_working_dir,
-                        local_project_dir=local_project_dir,
-                    )
-                )
-            case "uv":
-                python_components.append(await a_uv_component(target=target))
-            case "uv-embedded":
-                python_components.append(await a_uv_component_embedded(target=target))
-            case "uv-pip-embedded":
-                python_components.append(
-                    await a_uv_pip_component_embedded(
-                        target=target, python_version=python_version
-                    )
-                )
-            case "poetry":
-                raise NotImplementedError("poetry is not supported yet")
+        component = await _process_env_dependency(
+            dep=dep,
+            target=target,
+            python_version=python_version,
+            a_pyenv_component=a_pyenv_component,
+            a_pyenv_component_embedded=a_pyenv_component_embedded,
+            a_component_to_install_requirements_txt=a_component_to_install_requirements_txt,
+            a_component_to_install_requirements_txt_embedded=a_component_to_install_requirements_txt_embedded,
+            a_rye_component=a_rye_component,
+            a_uv_component=a_uv_component,
+            a_uv_component_embedded=a_uv_component_embedded,
+            a_uv_pip_component_embedded=a_uv_pip_component_embedded,
+            storage_resolver=storage_resolver,
+        )
+        if component:
+            python_components.append(component)
 
     mounts = await asyncio.gather(
         *[

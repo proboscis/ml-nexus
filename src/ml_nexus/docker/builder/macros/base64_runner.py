@@ -29,7 +29,7 @@ echo "$decoded_script"
 echo "======  END  SCRIPT ======"
 
 # Decode the script and execute it
-echo "$encoded_script" | base64 -d | bash
+echo "$encoded_script" | base64 -d | bash -e -o pipefail
 
 # Check the exit status of the decoded script
 exit_status=$?

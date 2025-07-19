@@ -139,6 +139,19 @@ chmod 600 ~/.git-credentials"""
 
 
 @instance
+def git_safe_directory_component():
+    """
+    Configures git to allow operations on repositories with different ownership.
+    This is necessary in Docker containers where the repository ownership may differ
+    from the container user.
+    """
+    from ml_nexus.schematics_util.universal import EnvComponent
+
+    script = """git config --global --add safe.directory '*'"""
+    return EnvComponent(init_script=[script])
+
+
+@instance
 def __load_default_design():
     from ml_nexus.util import a_system_parallel
     from ml_nexus.event_bus_util import handle_ml_nexus_system_call_events__simple
