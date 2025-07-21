@@ -121,10 +121,12 @@ class EnvComponent:
     dependencies: List["EnvComponent"] = field(default_factory=list)
 
 
-@injected
-async def a_hf_cache_component(  # pinjected: no dependencies
-    cache_name: str = "hf_cache", container_path: Path = Path("/cache/huggingface")
+@injected(protocol=AHfCacheComponentProtocol)
+async def a_hf_cache_component(  # noqa: PINJ005,PINJ015
+    cache_name: str = "hf_cache",
+    container_path: Path = Path("/cache/huggingface"),
 ) -> EnvComponent:
+    """pinjected: no dependencies"""
     return EnvComponent(
         installation_macro=[f"ENV HF_HOME={container_path}"],
         mounts=[CacheMountRequest(cache_name, container_path)],
@@ -147,8 +149,8 @@ async def base_apt_packages_component(
     )
 
 
-@injected
-async def a_pyenv_component(
+@injected(protocol=APyenvComponentProtocol)
+async def a_pyenv_component(  # noqa: PINJ005
     macro_install_pyenv_virtualenv_installer: Callable,
     base_apt_packages_component: EnvComponent,
     /,
@@ -175,8 +177,8 @@ async def a_pyenv_component(
     )
 
 
-@injected
-async def a_pyenv_component_embedded(
+@injected(protocol=APyenvComponentEmbeddedProtocol)
+async def a_pyenv_component_embedded(  # noqa: PINJ005
     base_apt_packages_component: EnvComponent,
     storage_resolver: IStorageResolver,
     new_RsyncArgs: "NewRsyncArgs",
@@ -317,8 +319,8 @@ source {venv_path}/bin/activate
     )
 
 
-@injected
-async def a_uv_pip_component_embedded(
+@injected(protocol=AUvPipComponentEmbeddedProtocol)
+async def a_uv_pip_component_embedded(  # noqa: PINJ005
     a_macro_install_uv: Callable,
     base_apt_packages_component: EnvComponent,
     rust_cargo_component: EnvComponent,
@@ -453,10 +455,10 @@ async def base64_runner_component(macro_install_base64_runner: Macro) -> EnvComp
     return EnvComponent(installation_macro=[macro_install_base64_runner])
 
 
-@injected
+@injected(protocol=ABuildSchematicsFromComponentProtocol)
 @beartype
 async def a_build_schematics_from_component(
-    new_DockerBuilder,
+    new_DockerBuilder: Callable,
     /,
     base_image: str,
     components: List[EnvComponent],
@@ -484,10 +486,10 @@ async def a_build_schematics_from_component(
     return ContainerSchematic(builder=base_builder, mount_requests=mounts)
 
 
-@injected
+@injected(protocol=AProjectSyncComponentProtocol)
 @beartype
-async def a_project_sync_component(
-    a_get_mount_request_for_pdir, /, tgt: ProjectDef
+async def a_project_sync_component(  # noqa: PINJ005
+    a_get_mount_request_for_pdir: Callable, /, tgt: ProjectDef
 ) -> EnvComponent:
     import asyncio
 
@@ -514,8 +516,8 @@ test_a_build_schematics_from_component: IProxy = a_build_schematics_from_compone
 )
 
 
-@injected
-async def a_rye_component(
+@injected(protocol=ARyeComponentProtocol)
+async def a_rye_component(  # noqa: PINJ005
     docker__install_rye: Callable,
     base_apt_packages_component: EnvComponent,
     ml_nexus_github_credential_component: EnvComponent,
@@ -577,8 +579,8 @@ def git_safe_directory_component() -> EnvComponent:
     return EnvComponent(init_script=["git config --global --add safe.directory '*'"])
 
 
-@injected
-async def a_uv_component(
+@injected(protocol=AUvComponentProtocol)
+async def a_uv_component(  # noqa: PINJ005
     a_macro_install_uv: Callable,
     base_apt_packages_component: EnvComponent,
     rust_cargo_component: EnvComponent,
@@ -619,8 +621,8 @@ async def a_uv_component(
     )
 
 
-@injected
-async def a_uv_component_embedded(
+@injected(protocol=AUvComponentEmbeddedProtocol)
+async def a_uv_component_embedded(  # noqa: PINJ005
     a_macro_install_uv: Callable,
     base_apt_packages_component: EnvComponent,
     rust_cargo_component: EnvComponent,
@@ -735,8 +737,8 @@ test_a_build_schematics_from_component_uc: IProxy[ContainerSchematic] = (
 )
 
 
-@injected
-async def a_component_to_install_requirements_txt(
+@injected(protocol=AComponentToInstallRequirementsTxtProtocol)
+async def a_component_to_install_requirements_txt(  # noqa: PINJ005
     storage_resolver: IStorageResolver, logger: "loguru.Logger", /, target: ProjectDef
 ) -> EnvComponent:
     local_path = await storage_resolver.locate(target.dirs[0].id)
@@ -769,8 +771,8 @@ async def a_component_to_install_requirements_txt(
     return EnvComponent(init_script=init_script)
 
 
-@injected
-async def a_component_to_install_requirements_txt_embedded(
+@injected(protocol=AComponentToInstallRequirementsTxtEmbeddedProtocol)
+async def a_component_to_install_requirements_txt_embedded(  # noqa: PINJ005
     storage_resolver: IStorageResolver,
     new_RsyncArgs: "NewRsyncArgs",
     logger: "loguru.Logger",
@@ -994,8 +996,8 @@ async def _process_env_dependency(
     return component
 
 
-@injected
-async def schematics_universal(  # noqa: PINJ006
+@injected(protocol=SchematicsUniversalProtocol)
+async def schematics_universal(  # noqa: PINJ005,PINJ006
     a_hf_cache_component: Callable,
     base_apt_packages_component: EnvComponent,
     a_pyenv_component: Callable,
