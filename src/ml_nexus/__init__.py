@@ -3,6 +3,7 @@ from typing import Any
 
 from pinjected import instance, injected, design, IProxy
 
+from ml_nexus.schematics_util.universal import EnvComponent
 from ml_nexus.storage_resolver import IdPath
 
 from pinjected.test import test_tree
@@ -126,7 +127,6 @@ def ml_nexus_github_credential_component__pat(github_access_token):
     """
     This is used by a_uv_component. but not yet by the rye component
     """
-    from ml_nexus.schematics_util.universal import EnvComponent
 
     script = f"""
 export GH_TOKEN={github_access_token}
@@ -145,7 +145,6 @@ def git_safe_directory_component():
     This is necessary in Docker containers where the repository ownership may differ
     from the container user.
     """
-    from ml_nexus.schematics_util.universal import EnvComponent
 
     script = """git config --global --add safe.directory '*'"""
     return EnvComponent(init_script=[script])
@@ -154,7 +153,6 @@ def git_safe_directory_component():
 @instance
 def __load_default_design():
     from ml_nexus.util import a_system_parallel
-    from ml_nexus.event_bus_util import handle_ml_nexus_system_call_events__simple
 
     from ml_nexus.docker.builder.docker_builder import DockerBuilder
 
@@ -190,6 +188,8 @@ def __load_default_design():
     )
     from ml_nexus.docker.builder.builder_utils.building import a_build_docker
     from ml_nexus.docker.client import LocalDockerClient, RemoteDockerClient
+
+    from ml_nexus.event_bus_util import a_handle_ml_nexus_system_call_events__simple
 
     default_design = design(
         env_result_download_path=Path("results").expanduser(),
@@ -239,7 +239,7 @@ def __load_default_design():
         ml_nexus_default_python_version="3.12",
         macro_install_pyenv_virtualenv_installer=macro_install_pyenv_virtualenv_installer,
         ml_nexus_github_credential_component=ml_nexus_github_credential_component__pat,
-        ml_nexus_system_call_event_bus=handle_ml_nexus_system_call_events__simple,
+        ml_nexus_system_call_event_bus=a_handle_ml_nexus_system_call_events__simple,
     )
 
     return default_design
