@@ -3,7 +3,6 @@ from typing import Any
 
 from pinjected import instance, injected, design, IProxy
 
-from ml_nexus.schematics_util.universal import EnvComponent
 from ml_nexus.storage_resolver import IdPath
 
 from pinjected.test import test_tree
@@ -135,6 +134,8 @@ export UV_GITHUB_TOKEN="$GH_PAT"
 git config --global credential.helper store
 echo "https://oauth2:$GH_PAT@github.com" > ~/.git-credentials
 chmod 600 ~/.git-credentials"""
+    from ml_nexus.schematics_util.universal import EnvComponent
+
     return EnvComponent(init_script=script.splitlines())
 
 
@@ -147,6 +148,8 @@ def git_safe_directory_component():
     """
 
     script = """git config --global --add safe.directory '*'"""
+    from ml_nexus.schematics_util.universal import EnvComponent
+
     return EnvComponent(init_script=[script])
 
 
