@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import json
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Callable, Union
 
 from google.cloud import aiplatform
+from google.oauth2 import service_account
 from google.auth.credentials import Credentials
 
 from ml_nexus.docker.builder.macros.macro_defs import Macro
@@ -27,7 +29,7 @@ class VertexAICustomJobFromSchematics(IScriptRunner):
     project_id: str
     location: str
     service_account: Optional[str] = None
-    credentials_provider: Optional[Callable[[], Optional[Credentials]]] = None
+    _gcp_credentials_str: str = ""
     docker_image_tag: Optional[str] = None
     stream_log: bool = True
     pinjected_additional_args: Optional[dict[str, str]] = field(default_factory=dict)
@@ -61,10 +63,24 @@ class VertexAICustomJobFromSchematics(IScriptRunner):
             self._prepare_future = asyncio.create_task(self._prepare_impl())
         return await self._prepare_future
 
-    def _make_credentials(self) -> Optional[Credentials]:
-        if self.credentials_provider is not None:
-            return self.credentials_provider()
-        return None
+    def _make_credentials(self) -> Credentials:
+        val = self._gcp_credentials_str
+        try:
+            p = Path(val)
+            if p.exists() and p.is_file():
+                return service_account.Credentials.from_service_account_file(str(p))
+        except Exception:
+            pass
+        try:
+            info = json.loads(val)
+            return service_account.Credentials.from_service_account_info(info)
+        except Exception as e:
+            raise CommandException(
+                message=f"Invalid GCP credentials string; must be a JSON service account content or a valid file path. {e!s}",
+                code=1,
+                stdout="",
+                stderr=str(e),
+            )
 
     def _aiplatform_init(self):
         creds = self._make_credentials()
