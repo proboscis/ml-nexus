@@ -150,4 +150,24 @@ class VertexAICustomJobFromSchematics(IScriptRunner):
             )
 
     def run_context(self) -> ScriptRunContext:
-        raise NotImplementedError()
+        def _random_remote_path() -> Path:
+            return Path("/tmp") / f"mlnexus-{uuid.uuid4().hex[:8]}"
+
+        async def _upload_remote(local: Path, remote: Path):
+            raise NotImplementedError("upload_remote is not supported in VertexAICustomJobFromSchematics run_context")
+
+        async def _delete_remote(path: Path):
+            return None
+
+        async def _download_remote(remote: Path, local: Path):
+            raise NotImplementedError("download_remote is not supported in VertexAICustomJobFromSchematics run_context")
+
+        return ScriptRunContext(
+            random_remote_path=_random_remote_path,
+            upload_remote=_upload_remote,
+            delete_remote=_delete_remote,
+            download_remote=_download_remote,
+            local_download_path=Path.cwd(),
+            env=self,
+            preparation=self.prepare,
+        )
