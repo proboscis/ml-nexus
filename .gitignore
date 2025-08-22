@@ -11,3 +11,5 @@ wheels/
 
 # Claude local settings
 .claude/settings.local.json
+# uv
+uv.lock
