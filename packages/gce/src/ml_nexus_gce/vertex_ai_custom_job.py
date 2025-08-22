@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Optional, Callable, Union
 
 from google.cloud import aiplatform
-from google.oauth2 import service_account
+from google.auth.credentials import Credentials
 
 from ml_nexus.docker.builder.macros.macro_defs import Macro
 from ml_nexus.project_structure import IScriptRunner, ProjectDef, ScriptRunContext
@@ -27,8 +27,7 @@ class VertexAICustomJobFromSchematics(IScriptRunner):
     project_id: str
     location: str
     service_account: Optional[str] = None
-    credentials_json_path: Optional[Path] = None
-    credentials_dict: Optional[dict] = None
+    credentials_provider: Optional[Callable[[], Optional[Credentials]]] = None
     docker_image_tag: Optional[str] = None
     stream_log: bool = True
     pinjected_additional_args: Optional[dict[str, str]] = field(default_factory=dict)
@@ -62,11 +61,9 @@ class VertexAICustomJobFromSchematics(IScriptRunner):
             self._prepare_future = asyncio.create_task(self._prepare_impl())
         return await self._prepare_future
 
-    def _make_credentials(self):
-        if self.credentials_dict is not None:
-            return service_account.Credentials.from_service_account_info(self.credentials_dict)
-        if self.credentials_json_path is not None:
-            return service_account.Credentials.from_service_account_file(str(self.credentials_json_path))
+    def _make_credentials(self) -> Optional[Credentials]:
+        if self.credentials_provider is not None:
+            return self.credentials_provider()
         return None
 
     def _aiplatform_init(self):

@@ -14,6 +14,13 @@ from pathlib import Path
 from ml_nexus_gce import VertexAICustomJobFromSchematics
 from ml_nexus.project_structure import ProjectDef, ProjectDir
 from ml_nexus.schematics import ContainerSchematic
+from google.oauth2 import service_account
+
+def gcp_credentials_from_json() -> "Credentials|None":
+    path = Path("path/to/sa.json")
+    if path.exists():
+        return service_account.Credentials.from_service_account_file(str(path))
+    return None  # falls back to ADC if None
 
 project = ProjectDef(dirs=[ProjectDir(id="example")])
 schem = ContainerSchematic()
@@ -35,14 +42,14 @@ runner = VertexAICustomJobFromSchematics(
     },
     project_id="your-gcp-project",
     location="us-central1",
-    service_account="sa-name@your-gcp-project.iam.gserviceaccount.com",
-    # credentials_json_path=Path("sa.json") or credentials_dict={...}
+    service_account="sa-name@your-gcp-project.iam.gserviceaccount.com",  # runtime identity for the job
+    credentials_provider=gcp_credentials_from_json,  # optional; if None, ADC is used
 )
 
 # await runner.run_script("echo hello")
 ```
 
 Notes:
-- Authentication: provide either `credentials_json_path` or `credentials_dict`; falls back to ADC if not provided.
+- Authentication: provide a single `credentials_provider: () -> Optional[Credentials]`. If it returns None, Application Default Credentials (ADC) are used. The `service_account` field controls the runtime identity on the Vertex job.
 - Container image is built from schematics and pushed to Artifact Registry using `_a_docker_push`.
 - This runner executes the prepared script via a base64 runner inside the container on Vertex AI Custom Job.
