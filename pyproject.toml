@@ -140,3 +140,5 @@ max-branches = 6
 max-statements = 40
 # 5. Too many nested blocks → R0916
 max-nested-blocks = 2
+[tool.uv.workspace]
+members = ["packages/gce"]

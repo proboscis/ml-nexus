@@ -1,0 +1,31 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ml-nexus-gce"
+version = "0.1.0"
+description = "GCE support package for ml-nexus"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    { name = "proboscis" }
+]
+dependencies = [
+    "ml-nexus",
+]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ml_nexus_gce"]
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.2.0",
+    "ruff>=0.12.0",
+]
+
+[tool.uv.sources]
+ml-nexus = { workspace = true }
