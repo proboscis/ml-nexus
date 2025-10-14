@@ -599,9 +599,13 @@ async def a_uv_component(  # noqa: PINJ005
         scripts += [
             "RANDOM_ID=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1)",
             "export UV_PROJECT_ENVIRONMENT=/root/.cache/uv_venv/$RANDOM_ID",
+            "export VIRTUAL_ENV=$UV_PROJECT_ENVIRONMENT",
         ]
     else:
-        scripts += ["export UV_PROJECT_ENVIRONMENT=/root/.cache/uv_venv/default"]
+        scripts += [
+            "export UV_PROJECT_ENVIRONMENT=/root/.cache/uv_venv/default",
+            "export VIRTUAL_ENV=$UV_PROJECT_ENVIRONMENT",
+        ]
     if do_sync:
         scripts += ["uv sync --upgrade", "source $UV_PROJECT_ENVIRONMENT/bin/activate"]
     return EnvComponent(
