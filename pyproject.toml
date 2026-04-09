@@ -10,16 +10,22 @@ authors = [
 ]
 dependencies = [
     "tqdm",
-    "pandas",
     "toml",
     "returns",
     "beartype",
-    "pinjected-openai @ git+https://github.com/proboscis/pinjected.git#subdirectory=packages/openai_support",
+    "pinjected @ git+https://github.com/proboscis/pinjected.git",
     "tomlkit>=0.13.2",
     "pre-commit>=4.2.0",
 ]
+
 readme = "README.md"
 requires-python = ">= 3.10"
+
+[project.optional-dependencies]
+ml = [
+    "pandas",
+    "pinjected-openai @ git+https://github.com/proboscis/pinjected.git#subdirectory=packages/openai_support",
+]
 
 [build-system]
 requires = ["hatchling"]

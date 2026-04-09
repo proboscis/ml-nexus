@@ -185,7 +185,19 @@ def __load_default_design():
         a_PersistentDockerEnvFromSchematics,
         a_docker_ps,
     )
-    from pinjected_openai.vision_llm import a_cached_vision_llm__gpt4o
+
+    try:
+        from pinjected_openai.vision_llm import a_cached_vision_llm__gpt4o
+    except ImportError:
+        import warnings
+
+        warnings.warn(
+            "pinjected-openai not installed. LLM features (a_cached_llm_for_ml_nexus) "
+            "will be unavailable. Install with: pip install 'ml-nexus[ml]'",
+            UserWarning,
+            stacklevel=2,
+        )
+        a_cached_vision_llm__gpt4o = None
     from ml_nexus.docker.builder.builder_utils.schematics_for_setup_py import (
         macro_install_pyenv_virtualenv_installer,
     )

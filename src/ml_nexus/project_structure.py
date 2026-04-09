@@ -1,6 +1,7 @@
 import abc
 import uuid
 from abc import ABC
+from datetime import datetime
 from dataclasses import dataclass, field, replace
 from itertools import chain
 from pathlib import Path
@@ -9,7 +10,6 @@ from typing import Optional, Callable, Awaitable, Literal, TYPE_CHECKING
 if TYPE_CHECKING:
     from ml_nexus.util import PsResult
 from pinjected.compatibility.task_group import TaskGroup
-import pandas as pd
 
 # Type alias for all possible project kinds
 ProjectKind = Literal[
@@ -117,44 +117,46 @@ class ScriptRunContext:
     def upload_mapping(self) -> dict[Path, Path]:
         return self._upload_mapping
 
-    def with_upload(
-        self, *local_paths, uploads: dict[Path, Path] = None
-    ) -> "ScriptRunContext":
-        def parse(p):
-            match p:
-                case str():
-                    return [Path(p)]
-                case Path():
-                    return [p]
-                case [*items]:
-                    res = []
-                    for i in items:
-                        res.extend(parse(i))
-                    return res
-                case _:
-                    raise ValueError(f"invalid type {type(p)}")
+    @staticmethod
+    def _parse_paths(p) -> list[Path]:
+        match p:
+            case str():
+                return [Path(p)]
+            case Path():
+                return [p]
+            case [*items]:
+                result = []
+                for i in items:
+                    result.extend(ScriptRunContext._parse_paths(i))
+                return result
+            case _:
+                raise ValueError(f"invalid type {type(p)}")
 
-        local_paths = parse(local_paths)
-        mapping = dict()
-        mapped = []
+    @staticmethod
+    def _build_path_mapping(
+        local_paths: list[Path], random_remote_path: Callable[[], Path]
+    ) -> dict[Path, Path]:
+        mapping = {}
         for local in local_paths:
             tmp_name = uuid.uuid4().hex[:8]
             if not local.is_dir():
                 tmp_name += local.suffix
-            dest = self.random_remote_path() / tmp_name
-            mapping[local] = dest
-            mapped.append(dest)
+            mapping[local] = random_remote_path() / tmp_name
+        return mapping
 
+    def with_upload(
+        self, *local_paths, uploads: dict[Path, Path] | None = None
+    ) -> "ScriptRunContext":
+        parsed = self._parse_paths(local_paths)
+        mapping = self._build_path_mapping(parsed, self.random_remote_path)
         for local, remote in (uploads or {}).items():
             mapping[local] = remote
-            mapped.append(remote)
-
         return replace(self, _upload_mapping=self.upload_mapping | mapping)
 
     async def run_script(self, script: str) -> ScriptRunResult:
         if self.preparation is not None:
             await self.preparation()
-        run_time = pd.Timestamp.now().strftime("%Y%m%d%H%M%S")
+        run_time = datetime.now().strftime("%Y%m%d%H%M%S")
         run_id = run_time + "-" + uuid.uuid4().hex[:6]
         result_dir = self.random_remote_path()
         async with TaskGroup() as tg:

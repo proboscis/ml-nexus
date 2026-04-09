@@ -5,7 +5,6 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
-import pandas as pd
 from pinjected import *
 
 from ml_nexus.docker.builder.docker_env_with_schematics import DockerEnvFromSchematics
@@ -41,6 +40,13 @@ async def a_docker_ps(logger, ml_nexus_docker_build_context, /, docker_host):
     data = [
         json.loads(line.strip()) for line in stdout.decode().split("\n") if line.strip()
     ]
+    try:
+        import pandas as pd
+    except ImportError:
+        raise ImportError(
+            "pandas is required for Docker container management. "
+            "Install it with: pip install 'ml-nexus[ml]'"
+        ) from None
     df = pd.DataFrame(data)
     if not df.empty:
         df.set_index("Names", inplace=True)
@@ -202,7 +208,7 @@ class PersistentDockerEnvFromSchematics(IScriptRunner):
             local_download_path=self._env_result_download_path,
             env=self,
         )
-    
+
     async def start(self):
         """Start the persistent container"""
         await self.ensure_container()

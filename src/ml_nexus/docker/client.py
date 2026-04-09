@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 
-import pandas as pd
 from pinjected import instance
 
 
@@ -17,7 +16,7 @@ class DockerClient(ABC):
 
     @abstractmethod
     async def run_container(
-        self, image: str, command: str, options: List[str] = None
+        self, image: str, command: str, options: List[str] | None = None
     ) -> str:
         """
         Dockerコンテナを実行する
@@ -48,7 +47,7 @@ class DockerClient(ABC):
 
     @abstractmethod
     async def build_image(
-        self, context_dir: Path, tag: str, options: List[str] = None
+        self, context_dir: Path, tag: str, options: List[str] | None = None
     ) -> str:
         """
         Dockerイメージをビルドする
@@ -172,7 +171,7 @@ class LocalDockerClient(DockerClient):
         return "docker"
 
     async def run_container(
-        self, image: str, command: str, options: List[str] = None
+        self, image: str, command: str, options: List[str] | None = None
     ) -> str:
         docker_cmd = self._get_docker_cmd()
         options_str = " ".join(options) if options else ""
@@ -185,7 +184,7 @@ class LocalDockerClient(DockerClient):
         return await self._a_system(cmd)
 
     async def build_image(
-        self, context_dir: Path, tag: str, options: List[str] = None
+        self, context_dir: Path, tag: str, options: List[str] | None = None
     ) -> str:
         docker_cmd = self._get_docker_cmd()
         options_str = " ".join(options) if options else ""
@@ -223,6 +222,13 @@ class LocalDockerClient(DockerClient):
             for line in stdout.decode().split("\n")
             if line.strip()
         ]
+        try:
+            import pandas as pd
+        except ImportError:
+            raise ImportError(
+                "pandas is required for Docker container management. "
+                "Install it with: pip install 'ml-nexus[ml]'"
+            ) from None
         df = pd.DataFrame(data)
         if not df.empty:
             df.set_index("Names", inplace=True)
@@ -255,7 +261,7 @@ class RemoteDockerClient(DockerClient):
     host: str
 
     async def run_container(
-        self, image: str, command: str, options: List[str] = None
+        self, image: str, command: str, options: List[str] | None = None
     ) -> str:
         options_str = " ".join(options) if options else ""
         cmd = f'ssh {self.host} "docker run {options_str} {image} {command}"'
@@ -266,7 +272,7 @@ class RemoteDockerClient(DockerClient):
         return await self._a_system(cmd)
 
     async def build_image(
-        self, context_dir: Path, tag: str, options: List[str] = None
+        self, context_dir: Path, tag: str, options: List[str] | None = None
     ) -> str:
         options_str = " ".join(options) if options else ""
         cmd = f'ssh {self.host} "docker build {options_str} -t {tag} {context_dir}"'
@@ -310,6 +316,13 @@ class RemoteDockerClient(DockerClient):
             for line in stdout.decode().split("\n")
             if line.strip()
         ]
+        try:
+            import pandas as pd
+        except ImportError:
+            raise ImportError(
+                "pandas is required for Docker container management. "
+                "Install it with: pip install 'ml-nexus[ml]'"
+            ) from None
         df = pd.DataFrame(data)
         if not df.empty:
             df.set_index("Names", inplace=True)
@@ -346,11 +359,10 @@ def ml_nexus_default_docker_client(
     Returns:
         DockerClient実装
     """
-    if (
-        ml_nexus_docker_host is None
-        or ml_nexus_docker_host == "localhost"
-        or ml_nexus_docker_host == "127.0.0.1"
-    ):
+    if ml_nexus_docker_host is None or ml_nexus_docker_host in {
+        "localhost",
+        "127.0.0.1",
+    }:
         return new_LocalDockerClient()
     else:
         # For remote Docker, context is not applicable as commands are executed via SSH
