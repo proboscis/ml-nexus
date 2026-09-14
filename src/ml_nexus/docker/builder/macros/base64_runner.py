@@ -22,12 +22,6 @@ fi
 
 # Get the base64 encoded script from the first argument
 encoded_script="$1"
-decoded_script=$(echo "$encoded_script" | base64 -d)
-
-echo "====== BEGIN SCRIPT ======"
-echo "$decoded_script"
-echo "======  END  SCRIPT ======"
-
 # Decode the script and execute it
 echo "$encoded_script" | base64 -d | bash -e -o pipefail
 

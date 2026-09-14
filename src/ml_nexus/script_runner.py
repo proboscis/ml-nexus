@@ -1,5 +1,7 @@
 import base64
+import os
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 
 from pinjected import instance, injected
 
@@ -21,12 +23,6 @@ fi
 
 # Get the base64 encoded script from the first argument
 encoded_script="$1"
-decoded_script=$(echo "$encoded_script" | base64 -d)
-
-echo "====== BEGIN SCRIPT ======"
-echo "$decoded_script"
-echo "======  END  SCRIPT ======"
-
 # Decode the script and execute it
 echo "$encoded_script" | base64 -d | bash
 
@@ -39,12 +35,29 @@ exit $exit_status
 """
 
 
+def _update_runner_script(runner_path: Path, script: str) -> None:
+    """Replace obsolete cached runners atomically so old logging does not persist."""
+    runner_path.parent.mkdir(parents=True, exist_ok=True)
+    if runner_path.exists() and runner_path.read_text() == script:
+        return
+    with NamedTemporaryFile(
+        mode="w", dir=runner_path.parent, delete=False
+    ) as temporary:
+        temporary.write(script)
+        temporary_path: Path = Path(temporary.name)
+    try:
+        os.replace(temporary_path, runner_path)
+    finally:
+        temporary_path.unlink(missing_ok=True)
+
+
 @injected
 async def a_script(script_base64_runner: str, a_system, /, script):
     runner_path: Path = Path("~/.cache/env_manager/base64_runner.sh").expanduser()
-    runner_path.parent.mkdir(parents=True, exist_ok=True)
-    if not runner_path.exists():
-        runner_path.write_text(script_base64_runner)
+    _update_runner_script(runner_path, script_base64_runner)
     encoded_script = base64.b64encode(script.encode("utf-8")).decode()
 
-    return await a_system(rf"/bin/bash {runner_path} {encoded_script}")
+    return await a_system(
+        rf"/bin/bash {runner_path} {encoded_script}",
+        display_command=f"/bin/bash {runner_path} [script omitted]",
+    )

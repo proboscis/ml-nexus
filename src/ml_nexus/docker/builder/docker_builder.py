@@ -67,23 +67,20 @@ class DockerBuilder:
             self.metadata = {}
 
     def assert_macros_not_acontextmanager(self, macro):
-        def dfs(macro):
-            match macro:
-                case acon if is_async_context_manager(acon):
-                    raise ValueError(
-                        f"Macro {acon} is an async context manager, which is not supported in DockerBuilder"
-                    )
-                case [*macros]:
-                    for m in macros:
-                        dfs(m)
-                case str() | Block() | RsyncArgs() | RCopy():
-                    pass
-                case f if callable(f):
-                    pass
-                case unknown:
-                    raise ValueError(f"Unknown type {type(unknown)} in macro {unknown}")
-
-        dfs(macro)
+        match macro:
+            case acon if is_async_context_manager(acon):
+                raise ValueError(
+                    f"Macro {acon} is an async context manager, which is not supported in DockerBuilder"
+                )
+            case [*macros]:
+                for m in macros:
+                    self.assert_macros_not_acontextmanager(m)
+            case str() | Block() | RsyncArgs() | RCopy():
+                pass
+            case f if callable(f):
+                pass
+            case unknown:
+                raise ValueError(f"Unknown type {type(unknown)} in macro {unknown}")
 
     async def a_build(self, tag: str, use_cache=True) -> str:
         async with self.build_lock:
@@ -93,7 +90,8 @@ class DockerBuilder:
                 )
                 return tag
             script = await self._build_entrypoint_script(self.scripts)
-            self._logger.info(f"Generated Entrypoint script: \n{script}")
+            # Entrypoint scripts can contain credentials and must remain out of logs.
+            self._logger.info("Generated entrypoint script")
             macros = [
                 f"FROM {self.base_image} as {self.base_stage_name}",
                 *self.macros,

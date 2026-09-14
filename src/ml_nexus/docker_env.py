@@ -176,12 +176,19 @@ class DockerHostEnvironment(IScriptRunner):
         cmd = await self.build_docker_cmd(
             f"bash /usr/local/bin/base64_runner.sh {base64_encoded_script}"
         )
-        
+
         # When using Docker context, no SSH needed - context handles remote connection
         if self._ml_nexus_docker_build_context:
-            result = await self._a_system_parallel(cmd)
+            result = await self._a_system_parallel(
+                cmd,
+                display_command=cmd.replace(base64_encoded_script, "[script omitted]"),
+            )
         else:
-            result = await self._a_system_parallel(f"ssh {self.docker_host} {cmd}")
+            result = await self._a_system_parallel(
+                f"ssh {self.docker_host} {cmd}",
+                display_command=f"ssh {self.docker_host} "
+                + cmd.replace(base64_encoded_script, "[script omitted]"),
+            )
 
         if result.exit_code != 0:
             from ml_nexus.util import CommandException
@@ -199,12 +206,19 @@ class DockerHostEnvironment(IScriptRunner):
         cmd = await self.build_docker_cmd(
             f"bash /usr/local/bin/base64_runner.sh {base64_encoded_script}"
         )
-        
+
         # When using Docker context, no SSH needed - context handles remote connection
         if self._ml_nexus_docker_build_context:
-            result = await self._a_system_parallel(cmd)
+            result = await self._a_system_parallel(
+                cmd,
+                display_command=cmd.replace(base64_encoded_script, "[script omitted]"),
+            )
         else:
-            result = await self._a_system_parallel(f"ssh {self.docker_host} {cmd}")
+            result = await self._a_system_parallel(
+                f"ssh {self.docker_host} {cmd}",
+                display_command=f"ssh {self.docker_host} "
+                + cmd.replace(base64_encoded_script, "[script omitted]"),
+            )
 
         if result.exit_code != 0:
             from ml_nexus.util import CommandException

@@ -135,7 +135,9 @@ class PersistentDockerEnvFromSchematics(IScriptRunner):
         docker_cmd = self._get_docker_cmd()
         cmd = f"{docker_cmd} exec {self.container_name} bash /usr/local/bin/base64_runner.sh {base64_encoded_script}"
         # await self._a_system(f'ssh {self.docker_host} {cmd}')
-        result = await self._a_system(cmd)
+        result = await self._a_system(
+            cmd, display_command=cmd.replace(base64_encoded_script, "[script omitted]")
+        )
 
         if result.exit_code != 0:
             from ml_nexus.util import CommandException
