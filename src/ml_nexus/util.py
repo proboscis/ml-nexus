@@ -4,7 +4,7 @@ import uuid
 from typing import Protocol
 
 from pinjected.compatibility.task_group import TaskGroup
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from loguru import logger
 from pinjected import *
@@ -34,13 +34,9 @@ def random_hex_color():
 
 
 async def yield_from_stream_safe(stream):
-    async def decode_stream():
-        async for line in stream:
-            yield line
-
     while True:
         try:
-            async for line in decode_stream():
+            async for line in stream:
                 yield line
         except ValueError as e:
             logger.error(f"error during decoding stream: {e}")
@@ -62,7 +58,7 @@ def log_with_color_id(stream_id, text, color):
 
 
 async def stream_and_capture_output(
-    stream, display=True, stream_id=None, color: str = None
+    stream, display=True, stream_id=None, color: str | None = None
 ):
     output = []
     buf = []
@@ -75,12 +71,10 @@ async def stream_and_capture_output(
 
     async for line in yield_from_stream_safe(stream):
         decoded_line = line.decode()
-        if display:
-            # logger.opt(record=True).info(decoded_line)  # Print in real-time
-            if decoded_line.endswith("\n"):
-                text = "".join(buf) + decoded_line
-                log_with_color_id(stream_id, text, color)
-                buf = []
+        if display and decoded_line.endswith("\n"):
+            text = "".join(buf) + decoded_line
+            log_with_color_id(stream_id, text, color)
+            buf = []
         output.append(decoded_line)
     return "".join(output)
 
@@ -103,7 +97,12 @@ class CommandException(Exception):
 
 class SystemCall(Protocol):
     async def __call__(
-        self, command: str, env: dict = None, working_dir=None
+        self,
+        command: str,
+        env: dict | None = None,
+        working_dir=None,
+        *,
+        display_command: str | None = None,
     ) -> PsResult:
         """
         run a command in the system.
@@ -160,120 +159,110 @@ class SystemCallState:
     message: str
 
 
-@instance
-async def ml_nexus_system_call_event_bus() -> MLNexusSystemCallEventBus:
-    """
-    a default implementation of the system call event bus. visualization focused.
-    """
+@dataclass
+class _SystemCallEventReporter:
+    states: dict[str, SystemCallState] = field(default_factory=dict)
+    visualizer: object = None
 
-    from pinjected.test_helper.rich_task_viz import RichTaskVisualizer
+    async def get_visualizer(self):
+        if self.visualizer is None:
+            from pinjected.test_helper.rich_task_viz import RichTaskVisualizer
 
-    _viz: RichTaskVisualizer = None
-    states: dict[str, SystemCallState] = dict()
-    from rich.spinner import Spinner
+            self.visualizer = RichTaskVisualizer()
+            self.visualizer.live.__enter__()
+        return self.visualizer
 
-    async def a_get_viz() -> RichTaskVisualizer:
-        nonlocal _viz
-        if _viz is None:
-            _viz = RichTaskVisualizer()
-            _viz.live.__enter__()
-        return _viz
-
-    # i dont want to use the visualizer until the task gets more than one.
-    # how can i do that?
-    # detect events for entering simultaneous and not
-    async def impl_single(event: ISystemCallEvent):
+    async def single(self, event: ISystemCallEvent):
         match event:
-            case SystemCallStart(id=id, command=command):
+            case SystemCallStart(command=command):
                 logger.info(f"running command=>{command}")
-            case SystemCallEnd(id=id, command=command, code=0):
+            case SystemCallEnd(command=command, code=0):
                 logger.success(f"command <<{command}>> finished with ExitCode:0")
-            case SystemCallEnd(id=id, command=command, code=_code):
-                logger.error(f"command: <<{command}>> failed with code {_code}.")
-            case SystemCallStdOut(id=id, command=command, text=text):
+            case SystemCallEnd(command=command, code=code):
+                logger.error(f"command: <<{command}>> failed with code {code}.")
+            case SystemCallStdOut(text=text):
                 logger.info(text.decode()[:-1])
-            case SystemCallStdErr(id=id, command=command, text=text):
+            case SystemCallStdErr(text=text):
                 logger.error(text.decode()[:-1])
             case _:
                 raise ValueError(f"unexpected event {event}")
 
-    async def impl_parallel(event: ISystemCallEvent):
-        nonlocal _viz
-        match event:
-            case SystemCallStart(id=id, command=command):
-                state = states[id]
-                viz = await a_get_viz()
-                # we have to start from second task.
-                for task, _state in states.items():
-                    if _state.name not in viz.messages:
-                        if _state.status == "started":
-                            status = Spinner("aesthetic")
-                        else:
-                            status = _state.status
-                        viz.add(name=_state.name, status=status, message=_state.message)
+    async def start_parallel(self):
+        from rich.spinner import Spinner
 
-            case SystemCallEnd(id=id, command=command, code=code):
-                state = states[id]
-                viz = await a_get_viz()
-                viz.update_status(state.name, "Finished with code " + str(code))
-                if code == 0:
-                    viz.remove(state.name)
-                if len(states) == 2:
-                    _viz.live.__exit__(None, None, None)
-                    _viz = None
-            case SystemCallStdOut(id=id, command=command, text=text):
-                viz = await a_get_viz()
-                state = states[id]
-                viz.update_message(state.name, state.message)
-            case SystemCallStdErr(id=id, command=command, text=text):
-                viz = await a_get_viz()
-                state = states[id]
-                viz.update_message(state.name, state.message)
-
-    async def impl(event: ISystemCallEvent):
-        match event:
-            case SystemCallStart(id=id, command=command):
-                name = f"{id[:6]}:{command[:200]}"
-                states[id] = SystemCallState(
-                    id=id, name=name, command=command, status="started", message=""
+        viz = await self.get_visualizer()
+        for state in self.states.values():
+            if state.name not in viz.messages:
+                status = (
+                    Spinner("aesthetic") if state.status == "started" else state.status
                 )
-                if len(states) > 1:
-                    await impl_parallel(event)
-                else:
-                    await impl_single(event)
-            case SystemCallEnd(id=id, command=command, code=code):
-                state = states[id]
-                state.message = f"Finished with code {code}"
-                state.status = "finished"
-                if len(states) == 2:
-                    await impl_parallel(event)
-                    await impl_single(event)
-                elif len(states) > 2:
-                    await impl_parallel(event)
-                else:
-                    await impl_single(event)
-                del states[id]
-                # logger.warning(f"states:{states}")
-            case SystemCallStdOut(id=id, command=command, text=text):
-                state = states[id]
-                state.message = text.decode()[:-1]
-                state.status = "running"
-                if len(states) > 1:
-                    await impl_parallel(event)
-                else:
-                    await impl_single(event)
-            case SystemCallStdErr(id=id, command=command, text=text):
-                state = states[id]
-                state.message = text.decode()[:-1]
-                state.status = "running"
-                if len(states) > 1:
-                    await impl_parallel(event)
-                else:
-                    await impl_single(event)
+                viz.add(name=state.name, status=status, message=state.message)
+
+    async def end_parallel(self, event: SystemCallEnd):
+        state = self.states[event.id]
+        viz = await self.get_visualizer()
+        viz.update_status(state.name, "Finished with code " + str(event.code))
+        if event.code == 0:
+            viz.remove(state.name)
+        if len(self.states) == 2:
+            self.visualizer.live.__exit__(None, None, None)
+            self.visualizer = None
+
+    async def parallel(self, event: ISystemCallEvent):
+        match event:
+            case SystemCallStart():
+                await self.start_parallel()
+            case SystemCallEnd():
+                await self.end_parallel(event)
+            case SystemCallStdOut() | SystemCallStdErr():
+                viz = await self.get_visualizer()
+                state = self.states[event.id]
+                viz.update_message(state.name, state.message)
+
+    async def publish(self, event: ISystemCallEvent):
+        if len(self.states) > 1:
+            await self.parallel(event)
+        else:
+            await self.single(event)
+
+    async def start(self, event: SystemCallStart):
+        name = f"{event.id[:6]}:{event.command[:200]}"
+        self.states[event.id] = SystemCallState(
+            id=event.id, name=name, command=event.command, status="started", message=""
+        )
+        await self.publish(event)
+
+    async def end(self, event: SystemCallEnd):
+        state = self.states[event.id]
+        state.message = f"Finished with code {event.code}"
+        state.status = "finished"
+        await self.publish(event)
+        if len(self.states) == 2:
+            await self.single(event)
+        del self.states[event.id]
+
+    async def output(self, event: SystemCallStdOut | SystemCallStdErr):
+        state = self.states[event.id]
+        state.message = event.text.decode()[:-1]
+        state.status = "running"
+        await self.publish(event)
+
+    async def __call__(self, event: ISystemCallEvent):
+        match event:
+            case SystemCallStart():
+                await self.start(event)
+            case SystemCallEnd():
+                await self.end(event)
+            case SystemCallStdOut() | SystemCallStdErr():
+                await self.output(event)
             case _:
                 raise ValueError(f"unexpected event {event}")
 
-    return impl
+
+@instance
+async def ml_nexus_system_call_event_bus() -> MLNexusSystemCallEventBus:
+    """Report command events, switching to a live view for concurrent commands."""
+    return _SystemCallEventReporter()
 
 
 @instance
@@ -291,9 +280,13 @@ async def a_system_parallel(
     ml_nexus_system_call_semaphore,
     /,
     command: str,
-    env: dict = None,
+    env: dict | None = None,
     working_dir=None,
+    *,
+    display_command: str | None = None,
 ):
+    # Keep executable data separate from the description exposed to observers.
+    logged_command: str = command if display_command is None else display_command
     new_env = os.environ.copy()
     if env is not None:
         new_env.update(env)
@@ -303,7 +296,7 @@ async def a_system_parallel(
     async with ml_nexus_system_call_semaphore:
         stream_id = uuid.uuid4().hex[:12]
         await ml_nexus_system_call_event_bus(
-            SystemCallStart(id=stream_id, command=command)
+            SystemCallStart(id=stream_id, command=logged_command)
         )
 
         # prev_state = await a_get_stty_state()
@@ -326,7 +319,7 @@ async def a_system_parallel(
             lines = ""
             async for line in yield_from_stream_safe(stream):
                 await ml_nexus_system_call_event_bus(
-                    SystemCallStdOut(id=stream_id, command=command, text=line)
+                    SystemCallStdOut(id=stream_id, command=logged_command, text=line)
                 )
                 lines += line.decode()[:-1] + "\n"
             return lines
@@ -339,7 +332,7 @@ async def a_system_parallel(
 
         result: int = await proc.wait()  # Wait for the subprocess to exit
         await ml_nexus_system_call_event_bus(
-            SystemCallEnd(id=stream_id, command=command, code=result)
+            SystemCallEnd(id=stream_id, command=logged_command, code=result)
         )
         # logger.info(f"command finished with:\n{stdout},{stderr}\nExitCode:{result}")
         if result == 0:
@@ -348,7 +341,7 @@ async def a_system_parallel(
         if result != 0:
             # logger.error(f"command: <<{command}>> failed with code {result}.")
             raise CommandException(
-                f"command: <<{command}>> failed with code {result}."
+                f"command: <<{logged_command}>> failed with code {result}."
                 f"\nstdout: {stdout}"
                 f"\nstderr: {stderr}",
                 code=result,
@@ -372,11 +365,15 @@ async def a_system_sequential(
     a_system_parallel: SystemCall,
     /,
     command: str,
-    env: dict = None,
+    env: dict | None = None,
     working_dir=None,
+    *,
+    display_command: str | None = None,
 ):
     async with system_lock:
-        return await a_system_parallel(command, env, working_dir)
+        return await a_system_parallel(
+            command, env, working_dir, display_command=display_command
+        )
 
 
 @instance
@@ -393,7 +390,7 @@ async def a_system_secret(
     ml_nexus_default_subprocess_limit,
     /,
     command: str,
-    env: dict = None,
+    env: dict | None = None,
     working_dir=None,
 ):
     new_env = os.environ.copy()
